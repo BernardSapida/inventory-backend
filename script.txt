@@ -1,0 +1,31 @@
+py -3.12 -m venv venv
+
+# Activate
+venv\Scripts\activate
+
+# Reinstall everything
+pip install fastapi uvicorn psycopg2-binary python-dotenv python-multipart loguru opencv-python pillow ultralytics
+
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+
+pip install ultralytics
+
+python prepare_dataset.py
+
+python train.py
+
+---
+
+python -c "from ultralytics import YOLO; model = YOLO('yolo26s.pt'); print('YOLO OK')"
+
+python -c "import psycopg2; conn = psycopg2.connect(host='localhost', port=5432, database='inventory', user='postgres', password='@Postgres'); print('DB OK')"
+
+http://localhost:8000/docs
+
+pip install -r requirements.txt
+
+python db/seed.py

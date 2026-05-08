@@ -1,0 +1,22 @@
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# YOLO training runs
+runs/
+
+# Dataset (large files, not for git)
+dataset/
+
+# Model weights (use Git LFS or share manually)
+*.pt
+
+# Logs
+*.log
+logs/

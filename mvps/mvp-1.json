@@ -1,0 +1,156 @@
+{
+  "project": {
+    "name": "Inventory System - Backend",
+    "platform": "Python + FastAPI",
+    "language": "Python 3.11+",
+    "entry_point": "main.py",
+    "server": "uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+  },
+  "stack": {
+    "framework": "FastAPI",
+    "ai_model": "YOLO26s (Ultralytics)",
+    "model_file": "yolo26s.pt",
+    "database_driver": "psycopg2",
+    "image_processing": ["Pillow", "OpenCV"],
+    "server": "uvicorn"
+  },
+  "environment": {
+    "file": ".env",
+    "variables": {
+      "DB_HOST": "localhost",
+      "DB_PORT": "5432",
+      "DB_NAME": "inventory",
+      "DB_USER": "postgres",
+      "DB_PASSWORD": "@Postgres"
+    }
+  },
+  "database": {
+    "tables": {
+      "inventory_items": {
+        "id": "SERIAL PRIMARY KEY",
+        "name": "VARCHAR(255) NOT NULL",
+        "quantity": "INTEGER NOT NULL",
+        "shelf_life_days": "INTEGER",
+        "date_received": "DATE DEFAULT CURRENT_DATE",
+        "expiry_date": "DATE",
+        "created_at": "TIMESTAMP DEFAULT NOW()"
+      },
+      "shelf_life_reference": {
+        "id": "SERIAL PRIMARY KEY",
+        "name": "VARCHAR(255) NOT NULL",
+        "shelf_life_days": "INTEGER NOT NULL",
+        "storage_type": "VARCHAR(50)"
+      }
+    },
+    "seed_data": {
+      "shelf_life_reference": [
+        {
+          "name": "egg",
+          "shelf_life_days": 21,
+          "storage_type": "refrigerated"
+        },
+        {
+          "name": "carrot",
+          "shelf_life_days": 30,
+          "storage_type": "refrigerated"
+        },
+        { "name": "onion", "shelf_life_days": 30, "storage_type": "room_temp" },
+        { "name": "tomato", "shelf_life_days": 7, "storage_type": "room_temp" },
+        {
+          "name": "potato",
+          "shelf_life_days": 30,
+          "storage_type": "room_temp"
+        },
+        {
+          "name": "cabbage",
+          "shelf_life_days": 14,
+          "storage_type": "refrigerated"
+        },
+        {
+          "name": "garlic",
+          "shelf_life_days": 90,
+          "storage_type": "room_temp"
+        },
+        { "name": "ginger", "shelf_life_days": 14, "storage_type": "room_temp" }
+      ]
+    }
+  },
+  "folder_structure": {
+    "main.py": "FastAPI app entry point, registers all routers, sets up CORS",
+    "routes": {
+      "inventory.py": "GET /inventory and POST /inventory endpoints",
+      "scan.py": "POST /scan endpoint with YOLO26s inference"
+    },
+    "db": {
+      "connection.py": "psycopg2 connection using .env variables",
+      "seed.py": "script to create tables and insert shelf_life_reference seed data"
+    },
+    "models": {
+      "yolo26s.pt": "auto downloaded by ultralytics on first run"
+    },
+    ".env": "environment variables",
+    "requirements.txt": "all dependencies"
+  },
+  "cors": {
+    "allow_origins": ["*"],
+    "allow_methods": ["*"],
+    "allow_headers": ["*"]
+  },
+  "endpoints": {
+    "GET /inventory": {
+      "description": "Fetch all inventory items ordered by created_at descending",
+      "response": {
+        "success": "[{ id, name, quantity, shelf_life_days, date_received, expiry_date, created_at }]"
+      }
+    },
+    "POST /scan": {
+      "description": "Receive base64 image, run YOLO26s inference, return detected items with shelf life",
+      "request": {
+        "image": "base64 encoded string"
+      },
+      "inference_flow": [
+        "1. Decode base64 string to image",
+        "2. Save image temporarily",
+        "3. Run YOLO26s inference on image",
+        "4. Count detections per class name",
+        "5. For each detected class, query shelf_life_reference table by name",
+        "6. Compute expiry_date = today + shelf_life_days",
+        "7. Delete temporary image file",
+        "8. Return detected items array"
+      ],
+      "response": {
+        "success": "[{ name, quantity, shelf_life_days, date_received, expiry_date }]",
+        "error": "{ detail: 'error message' }"
+      }
+    },
+    "POST /inventory": {
+      "description": "Save confirmed items to inventory_items table",
+      "request": {
+        "items": "[{ name, quantity, shelf_life_days, date_received, expiry_date }]"
+      },
+      "response": {
+        "success": "{ message: 'Items saved successfully' }",
+        "error": "{ detail: 'error message' }"
+      }
+    }
+  },
+  "dependencies": [
+    "fastapi",
+    "uvicorn",
+    "ultralytics",
+    "opencv-python",
+    "pillow",
+    "psycopg2-binary",
+    "python-dotenv",
+    "python-multipart"
+  ],
+  "notes": [
+    "YOLO26s model auto downloads on first inference call",
+    "shelf_life_reference seed must be run before first scan",
+    "If detected item not found in shelf_life_reference, shelf_life_days defaults to null",
+    "date_received defaults to today if not provided",
+    "expiry_date = date_received + shelf_life_days",
+    "CORS must be open for Expo Go to connect",
+    "Run db/seed.py once before starting the server"
+  ]
+}
