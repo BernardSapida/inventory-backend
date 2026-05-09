@@ -3,6 +3,6 @@ uvicorn
 ultralytics
 opencv-python
 pillow
-psycopg2-binary
+firebase-admin
 python-dotenv
 python-multipart

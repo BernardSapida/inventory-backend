@@ -1,59 +1,19 @@
-from connection import get_connection
+from db.connection import get_db
 
-CREATE_INVENTORY_ITEMS = """
-CREATE TABLE IF NOT EXISTS inventory_items (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    quantity INTEGER NOT NULL,
-    shelf_life_days INTEGER,
-    date_received DATE DEFAULT CURRENT_DATE,
-    expiry_date DATE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-"""
-
-CREATE_SHELF_LIFE_REFERENCE = """
-CREATE TABLE IF NOT EXISTS shelf_life_reference (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    shelf_life_days INTEGER NOT NULL,
-    storage_type VARCHAR(50)
-);
-"""
-
-SEED_DATA = [
-    ("egg", 21, "refrigerated"),
-    ("carrot", 30, "refrigerated"),
-    ("onion", 30, "room_temp"),
-    ("tomato", 7, "room_temp"),
-    ("potato", 30, "room_temp"),
-    ("cabbage", 14, "refrigerated"),
-    ("garlic", 90, "room_temp"),
-    ("ginger", 14, "room_temp"),
+SHELF_LIFE_REFERENCE = [
+    {"name": "egg",    "shelf_life_days": 21, "unit": "pcs", "category": "Dairy"},
+    {"name": "lemon",  "shelf_life_days": 21, "unit": "pcs", "category": "Fruits"},
+    {"name": "onion",  "shelf_life_days": 60, "unit": "pcs", "category": "Vegetables"},
+    {"name": "carrot", "shelf_life_days": 28, "unit": "pcs", "category": "Vegetables"},
 ]
 
 def seed():
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(CREATE_INVENTORY_ITEMS)
-    cur.execute(CREATE_SHELF_LIFE_REFERENCE)
-
-    cur.execute("SELECT COUNT(*) FROM shelf_life_reference")
-    count = cur.fetchone()[0]
-    if count == 0:
-        cur.executemany(
-            "INSERT INTO shelf_life_reference (name, shelf_life_days, storage_type) VALUES (%s, %s, %s)",
-            SEED_DATA,
-        )
-        print(f"Seeded {len(SEED_DATA)} shelf_life_reference rows.")
-    else:
-        print("shelf_life_reference already seeded, skipping.")
-
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Database setup complete.")
+    db = get_db()
+    col = db.collection("shelf_life_reference")
+    for item in SHELF_LIFE_REFERENCE:
+        col.document(item["name"]).set(item)
+        print(f"Seeded: {item['name']}")
+    print("Done.")
 
 if __name__ == "__main__":
     seed()

@@ -1,14 +1,12 @@
 import os
-import psycopg2
+import firebase_admin
+from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_connection():
-    return psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-    )
+def get_db():
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(os.getenv("FIREBASE_CREDENTIALS", "serviceAccountKey.json"))
+        firebase_admin.initialize_app(cred)
+    return firestore.client()

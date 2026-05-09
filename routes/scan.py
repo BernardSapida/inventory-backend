@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ultralytics import YOLO
 
-from db.connection import get_connection
+from db.connection import get_db
 
 router = APIRouter()
 
@@ -74,20 +74,16 @@ def scan_image(request: ScanRequest):
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-    # Query shelf life from DB and build response
-    conn = get_connection()
-    cur = conn.cursor()
+    # Query shelf life from Firestore and build response
+    db = get_db()
     detections = []
     today = date.today()
 
     try:
         for cls_name, boxes in class_boxes.items():
-            cur.execute(
-                "SELECT shelf_life_days FROM shelf_life_reference WHERE name = %s",
-                (cls_name,),
-            )
-            row = cur.fetchone()
-            shelf_life_days = row[0] if row else None
+            ref_doc = db.collection("shelf_life_reference").document(cls_name).get()
+            ref = ref_doc.to_dict() if ref_doc.exists else {}
+            shelf_life_days = ref.get("shelf_life_days")
             expiry_date = (today + timedelta(days=shelf_life_days)) if shelf_life_days else None
             quantity = len(boxes)
 
@@ -96,6 +92,8 @@ def scan_image(request: ScanRequest):
             detections.append({
                 "name": cls_name,
                 "quantity": quantity,
+                "unit": ref.get("unit", "pcs"),
+                "category": ref.get("category"),
                 "shelf_life_days": shelf_life_days,
                 "date_received": str(today),
                 "expiry_date": str(expiry_date) if expiry_date else None,
@@ -104,9 +102,6 @@ def scan_image(request: ScanRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
 
     total_items = sum(d["quantity"] for d in detections)
     logger.success(f"✅ Scan completed! Detected {total_items} item(s) across {len(detections)} class(es)")

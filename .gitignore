@@ -17,3 +17,6 @@ dataset/
 # Logs
 *.log
 logs/
+
+# Firebase service account key
+serviceAccountKey.json
