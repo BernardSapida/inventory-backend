@@ -14,9 +14,6 @@ runs/
 # Dataset (large files, not for git)
 dataset/
 
-# Model weights (use Git LFS or share manually)
-*.pt
-
 # Logs
 *.log
 logs/
