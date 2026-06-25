@@ -37,7 +37,7 @@ def scan_image(request: ScanRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid base64 image data")
 
-    # Run YOLO inference — collect boxes grouped by normalized class name
+    # Run YOLO inference - collect boxes grouped by normalized class name
     tmp_path = None
     # maps cls_name → list of box dicts
     class_boxes: dict[str, list[dict]] = {}
@@ -96,7 +96,7 @@ def scan_image(request: ScanRequest):
                 "category": ref.get("category"),
                 "shelf_life_days": shelf_life_days,
                 "date_received": str(today),
-                "expiry_date": str(expiry_date) if expiry_date else None,
+                "expirationDate": str(expiry_date) if expiry_date else None,
                 "boxes": boxes,
             })
 

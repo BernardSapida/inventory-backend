@@ -65,7 +65,7 @@ if __name__ == '__main__':
             dst_labels = os.path.join(OUTPUT_DIR, split, 'labels')
 
             if not os.path.exists(src_images):
-                print(f"   ⚠️ {split} not found — skipping")
+                print(f"   ⚠️ {split} not found - skipping")
                 continue
 
             count = 0
@@ -99,7 +99,7 @@ if __name__ == '__main__':
                                 parts[0] = str(class_id_map[old_id])
                                 new_lines.append(' '.join(parts) + '\n')
                             else:
-                                print(f"   ⚠️ Unknown class {old_id} in {label_file} — skipping")
+                                print(f"   ⚠️ Unknown class {old_id} in {label_file} - skipping")
 
                     with open(new_label_path, 'w') as f:
                         f.writelines(new_lines)

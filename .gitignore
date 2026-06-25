@@ -20,3 +20,6 @@ logs/
 
 # Firebase service account key
 serviceAccountKey.json
+
+# Firestore data backups (may contain production data)
+backups/

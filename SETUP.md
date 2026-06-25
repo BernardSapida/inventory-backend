@@ -1,4 +1,4 @@
-# Inventory Backend — Setup & Training Guide
+# Inventory Backend - Setup & Training Guide
 
 ## Prerequisites
 
@@ -103,7 +103,7 @@ Visit the interactive API docs at: `http://localhost:8000/docs`
 
 ## Training Steps
 
-### Step 1 — Prepare Your Dataset
+### Step 1 - Prepare Your Dataset
 
 Place your YOLO-format dataset under:
 
@@ -123,7 +123,7 @@ python prepare_dataset.py
 
 This splits training images 80/20 into `train/` and `valid/` folders and prints a summary.
 
-### Step 2 — Update `train.py` Paths
+### Step 2 - Update `train.py` Paths
 
 Open [train.py](train.py) and set the `data` path to your `data.yaml` file:
 
@@ -142,7 +142,7 @@ nc: 1
 names: ['egg']
 ```
 
-### Step 3 — Train the Model
+### Step 3 - Train the Model
 
 ```bash
 python train.py
@@ -160,7 +160,7 @@ Training config used:
 
 Results are saved to `runs/detect/combined_model/`.
 
-### Step 4 — Use the Trained Model
+### Step 4 - Use the Trained Model
 
 After training, copy the best weights:
 
