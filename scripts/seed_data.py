@@ -56,6 +56,40 @@ def ts(d):
     return datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc)
 
 
+# Density (g/ml) by product name - MIRRORS DENSITY_DEFAULTS in
+# smartstock-admin/src/lib/units.ts and inventory-native/lib/types/product.ts.
+# Lets a mass-stocked seasoning be measured in tbsp/tsp (1 tbsp sugar = 12.5 g).
+# Keep these three tables in sync. Only g-based products carry a density.
+import re
+
+_DENSITY_DEFAULTS = [
+    (r"\b(brown\s+sugar)\b", 0.93),
+    (r"\b(powdered|icing|confectioner'?s)\s+sugar\b", 0.56),
+    (r"\bsugar\b", 0.845),
+    (r"\b(table\s+)?salt\b", 1.2),
+    (r"\b(baking\s+(soda|powder))\b", 0.9),
+    (r"\b(corn\s*starch|cornflour)\b", 0.63),
+    (r"\bflour\b", 0.53),
+    (r"\b(pepper|paprika|cumin|cinnamon|turmeric|oregano|chili\s*powder|spice|seasoning)\b", 0.5),
+    (r"\b(msg|vetsin|monosodium)\b", 0.92),
+    (r"\b(rice)\b", 0.85),
+    (r"\b(oil|vinegar|soy\s*sauce|fish\s*sauce|water|milk|broth|stock)\b", 1.0),
+    (r"\b(honey|syrup|molasses)\b", 1.42),
+    (r"\b(butter|margarine)\b", 0.91),
+]
+
+
+def suggested_density(name, du):
+    """Name-matched density (g/ml), or None. Only meaningful for g-based stock."""
+    if base_unit(du) != "g":
+        return None
+    n = name.strip().lower()
+    for pattern, value in _DENSITY_DEFAULTS:
+        if re.search(pattern, n):
+            return value
+    return None
+
+
 # ── USERS ─────────────────────────────────────────────────────────────────────
 
 _ADMIN_PERMS = {
@@ -408,8 +442,8 @@ SEED_RECIPES = [
      "3. Place 1 tbsp of filling on a spring roll wrapper and roll tightly.\n"
      "4. Seal edges with a flour-water paste.\n"
      "5. Deep-fry in hot cooking oil until golden and crispy. Drain and serve.",
-     [("Ground Pork", 100, "g"), ("Onion", 0.1, "pcs"), ("Garlic", 0.2, "pcs"),
-      ("Egg", 0.1, "pcs"), ("All-Purpose Flour", 20, "g"),
+     [("Ground Pork", 100, "g"), ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
+      ("Egg", 1, "pcs"), ("All-Purpose Flour", 20, "g"),
       ("Salt", 2, "g"), ("Black Pepper", 1, "g"), ("Cooking Oil", 20, "ml")]),
 
     ("Siomai", "Appetizer", 8,
@@ -420,8 +454,8 @@ SEED_RECIPES = [
      "4. Arrange in a greased steamer basket.\n"
      "5. Steam over medium heat for 15-18 minutes. Serve with soy sauce and calamansi.",
      [("Ground Pork", 40, "g"), ("Shrimp", 20, "g"), ("Wonton Wrapper", 1, "pcs"),
-      ("Onion", 0.1, "pcs"), ("Garlic", 0.3, "pcs"), ("Carrot", 0.1, "pcs"),
-      ("Egg", 0.1, "pcs"), ("Cornstarch", 5, "g"), ("Sesame Oil", 1, "ml"),
+      ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"), ("Carrot", 1, "pcs"),
+      ("Egg", 1, "pcs"), ("Cornstarch", 5, "g"), ("Sesame Oil", 1, "ml"),
       ("Oyster Sauce", 3, "ml"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
 
     ("Ukoy", "Appetizer", 4,
@@ -431,7 +465,7 @@ SEED_RECIPES = [
      "4. Drop spoonfuls into hot cooking oil and press flat.\n"
      "5. Fry until golden and crispy on both sides. Serve with spiced vinegar.",
      [("Shrimp", 100, "g"), ("Bean Sprout", 50, "g"), ("All-Purpose Flour", 30, "g"),
-      ("Egg", 0.25, "pcs"), ("Garlic", 0.5, "pcs"),
+      ("Egg", 1, "pcs"), ("Garlic", 1, "pcs"),
       ("Salt", 1, "g"), ("Cooking Oil", 20, "ml")]),
 
     ("Lumpiang Sariwa", "Appetizer", 8,
@@ -441,8 +475,8 @@ SEED_RECIPES = [
      "4. Season with fish sauce; cook until vegetables are tender. Cool.\n"
      "5. Wrap filling in lumpia wrapper and serve with sweet peanut sauce.",
      [("Lumpia Wrapper", 1, "pcs"), ("Ground Pork", 40, "g"), ("Shrimp", 25, "g"),
-      ("Tofu", 0.1, "pcs"), ("Carrot", 0.1, "pcs"), ("Bean Sprout", 30, "g"),
-      ("Onion", 0.1, "pcs"), ("Garlic", 0.3, "pcs"),
+      ("Tofu", 1, "pcs"), ("Carrot", 1, "pcs"), ("Bean Sprout", 30, "g"),
+      ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
       ("Fish Sauce", 5, "ml"), ("Cooking Oil", 5, "ml")]),
 
     # ── MAIN COURSE (10) ─────────────────────────────────────────────────────
@@ -454,7 +488,7 @@ SEED_RECIPES = [
      "4. Lower heat and simmer 25 minutes until chicken is tender.\n"
      "5. Increase heat to reduce and glaze the sauce. Serve with steamed rice.",
      [("Chicken Thigh", 300, "g"), ("Soy Sauce", 40, "ml"), ("Vinegar", 20, "ml"),
-      ("Garlic", 0.3, "pcs"), ("Bay Leaf", 0.3, "pcs"),
+      ("Garlic", 1, "pcs"), ("Bay Leaf", 1, "pcs"),
       ("Black Pepper", 2, "g"), ("Cooking Oil", 15, "ml")]),
 
     ("Kare-Kare", "Main Course", 5,
@@ -473,7 +507,7 @@ SEED_RECIPES = [
      "3. Deep-fry in hot cooking oil, turning occasionally, until skin crackles.\n"
      "4. Drain on paper towels, then chop into serving pieces.\n"
      "5. Serve with lechon sauce or soy-vinegar dip.",
-     [("Pork Belly", 250, "g"), ("Garlic", 0.3, "pcs"),
+     [("Pork Belly", 250, "g"), ("Garlic", 1, "pcs"),
       ("Salt", 5, "g"), ("Black Pepper", 2, "g"), ("Cooking Oil", 50, "ml")]),
 
     ("Sinigang na Baboy", "Main Course", 6,
@@ -482,8 +516,8 @@ SEED_RECIPES = [
      "3. Stir in tamarind base or sinigang mix; season with fish sauce.\n"
      "4. Add okra and cook 5 minutes.\n"
      "5. Add kangkong last; cook 2 minutes. Serve hot with rice.",
-     [("Pork Belly", 200, "g"), ("Tomato", 1, "pcs"), ("Onion", 0.5, "pcs"),
-      ("Fish Sauce", 15, "ml"), ("Kangkong", 0.5, "pcs"), ("Okra", 3, "pcs")]),
+     [("Pork Belly", 200, "g"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
+      ("Fish Sauce", 15, "ml"), ("Kangkong", 1, "pcs"), ("Okra", 3, "pcs")]),
 
     ("Bulalo", "Main Course", 4,
      "1. Blanch beef shank in boiling water for 5 minutes; rinse and clean.\n"
@@ -491,7 +525,7 @@ SEED_RECIPES = [
      "3. Skim the broth periodically for clarity.\n"
      "4. Season with fish sauce and whole black pepper.\n"
      "5. Add pechay in the last 5 minutes. Serve hot.",
-     [("Beef Shank", 250, "g"), ("Onion", 0.5, "pcs"), ("Garlic", 0.3, "pcs"),
+     [("Beef Shank", 250, "g"), ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
       ("Fish Sauce", 15, "ml"), ("Pechay", 1, "pcs"), ("Black Pepper", 2, "g")]),
 
     ("Tinolang Manok", "Main Course", 5,
@@ -500,8 +534,8 @@ SEED_RECIPES = [
      "3. Pour in water or broth; bring to a boil then simmer 20 minutes.\n"
      "4. Add green papaya and cook 8 minutes until tender.\n"
      "5. Season with fish sauce; add pechay and cook 2 minutes. Serve hot.",
-     [("Chicken Wings", 250, "g"), ("Ginger", 0.5, "pcs"), ("Onion", 0.5, "pcs"),
-      ("Garlic", 0.3, "pcs"), ("Green Papaya", 0.5, "pcs"), ("Pechay", 1, "pcs"),
+     [("Chicken Wings", 250, "g"), ("Ginger", 1, "pcs"), ("Onion", 1, "pcs"),
+      ("Garlic", 1, "pcs"), ("Green Papaya", 1, "pcs"), ("Pechay", 1, "pcs"),
       ("Fish Sauce", 15, "ml"), ("Cooking Oil", 10, "ml")]),
 
     ("Caldereta", "Main Course", 6,
@@ -510,10 +544,10 @@ SEED_RECIPES = [
      "3. Return beef; add enough water to cover. Simmer 60 minutes.\n"
      "4. Add potato and bell pepper; cook 10 minutes until tender.\n"
      "5. Add bay leaves, season with salt and pepper. Serve hot with rice.",
-     [("Beef Brisket", 200, "g"), ("Tomato", 0.5, "pcs"), ("Onion", 0.5, "pcs"),
-      ("Garlic", 0.5, "pcs"), ("Bell Pepper", 0.25, "pcs"), ("Potato", 0.5, "pcs"),
+     [("Beef Brisket", 200, "g"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
+      ("Garlic", 1, "pcs"), ("Bell Pepper", 1, "pcs"), ("Potato", 1, "pcs"),
       ("Tomato Paste", 15, "g"), ("Liver Spread", 10, "g"),
-      ("Bay Leaf", 0.3, "pcs"), ("Salt", 2, "g"), ("Black Pepper", 1, "g"),
+      ("Bay Leaf", 1, "pcs"), ("Salt", 2, "g"), ("Black Pepper", 1, "g"),
       ("Cooking Oil", 10, "ml")]),
 
     ("Ginataang Hipon Sitaw at Kalabasa", "Main Course", 4,
@@ -522,8 +556,8 @@ SEED_RECIPES = [
      "3. Pour in coconut milk and bring to a gentle simmer.\n"
      "4. Add sitaw and cook 3 minutes.\n"
      "5. Add shrimp, season with fish sauce, and cook 3 minutes until pink.",
-     [("Shrimp", 150, "g"), ("Sitaw", 5, "pcs"), ("Kalabasa", 0.3, "pcs"),
-      ("Coconut Milk", 60, "ml"), ("Garlic", 0.5, "pcs"), ("Onion", 0.5, "pcs"),
+     [("Shrimp", 150, "g"), ("Sitaw", 5, "pcs"), ("Kalabasa", 1, "pcs"),
+      ("Coconut Milk", 60, "ml"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
       ("Fish Sauce", 5, "ml"), ("Cooking Oil", 10, "ml")]),
 
     ("Chicken Inasal", "Main Course", 4,
@@ -532,7 +566,7 @@ SEED_RECIPES = [
      "3. Grill over medium-high heat, basting with annatto-oil mixture.\n"
      "4. Cook until skin is charred in spots and juices run clear.\n"
      "5. Serve with garlic rice and spiced vinegar.",
-     [("Chicken Thigh", 250, "g"), ("Garlic", 1, "pcs"), ("Ginger", 0.5, "pcs"),
+     [("Chicken Thigh", 250, "g"), ("Garlic", 1, "pcs"), ("Ginger", 1, "pcs"),
       ("Vinegar", 20, "ml"), ("Annatto Powder", 3, "g"),
       ("Fish Sauce", 10, "ml"), ("Salt", 2, "g"), ("Cooking Oil", 15, "ml")]),
 
@@ -553,7 +587,7 @@ SEED_RECIPES = [
      "3. Add kangkong stalks first and cook 2 minutes.\n"
      "4. Add leaves, season with fish sauce, and toss quickly.\n"
      "5. Cook 1 more minute - do not overcook. Serve immediately.",
-     [("Kangkong", 1, "pcs"), ("Garlic", 0.3, "pcs"), ("Onion", 0.3, "pcs"),
+     [("Kangkong", 1, "pcs"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
       ("Fish Sauce", 10, "ml"), ("Cooking Oil", 10, "ml")]),
 
     ("Ginisang Sitaw", "Side Dish", 4,
@@ -562,8 +596,8 @@ SEED_RECIPES = [
      "3. Add sitaw and stir-fry 5 minutes over high heat.\n"
      "4. Season with fish sauce; add a splash of water if needed.\n"
      "5. Cover and cook until beans are tender. Serve with rice.",
-     [("Sitaw", 5, "pcs"), ("Garlic", 0.3, "pcs"), ("Onion", 0.3, "pcs"),
-      ("Tomato", 0.5, "pcs"), ("Fish Sauce", 10, "ml"), ("Cooking Oil", 10, "ml")]),
+     [("Sitaw", 5, "pcs"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
+      ("Tomato", 1, "pcs"), ("Fish Sauce", 10, "ml"), ("Cooking Oil", 10, "ml")]),
 
     ("Ensaladang Talong", "Side Dish", 3,
      "1. Grill eggplants directly over flame until charred and very soft.\n"
@@ -571,7 +605,7 @@ SEED_RECIPES = [
      "3. Flake the eggplant flesh and let cool completely.\n"
      "4. Mix with diced tomato and thinly sliced onion.\n"
      "5. Dress with fish sauce and calamansi juice. Serve at room temperature.",
-     [("Eggplant", 1, "pcs"), ("Onion", 0.3, "pcs"), ("Tomato", 1, "pcs"),
+     [("Eggplant", 1, "pcs"), ("Onion", 1, "pcs"), ("Tomato", 1, "pcs"),
       ("Fish Sauce", 10, "ml"), ("Calamansi", 2, "pcs")]),
 
     ("Ensaladang Mangga", "Side Dish", 3,
@@ -580,7 +614,7 @@ SEED_RECIPES = [
      "3. Mix in bagoong alamang and calamansi juice.\n"
      "4. Toss gently; refrigerate 10 minutes to meld flavors.\n"
      "5. Serve alongside grilled or fried fish.",
-     [("Green Mango", 1, "pcs"), ("Tomato", 1, "pcs"), ("Onion", 0.3, "pcs"),
+     [("Green Mango", 1, "pcs"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
       ("Bagoong Alamang", 30, "g"), ("Calamansi", 2, "pcs")]),
 
     ("Ginisang Monggo", "Side Dish", 6,
@@ -589,20 +623,38 @@ SEED_RECIPES = [
      "3. Add pre-soaked mung beans and water to cover by 2 inches.\n"
      "4. Simmer 30-40 minutes, stirring occasionally, until beans are soft and creamy.\n"
      "5. Season with fish sauce; adjust consistency with water. Serve hot.",
-     [("Mung Bean", 30, "g"), ("Ground Pork", 30, "g"), ("Garlic", 0.3, "pcs"),
-      ("Onion", 0.3, "pcs"), ("Tomato", 0.5, "pcs"),
+     [("Mung Bean", 30, "g"), ("Ground Pork", 30, "g"), ("Garlic", 1, "pcs"),
+      ("Onion", 1, "pcs"), ("Tomato", 1, "pcs"),
       ("Fish Sauce", 5, "ml"), ("Cooking Oil", 5, "ml")]),
 
-    # ── DESSERT (5) ──────────────────────────────────────────────────────────
+    # ── DESSERT (6) ──────────────────────────────────────────────────────────
 
+    # Caramel Sauce measures sugar by the TABLESPOON and salt by the TEASPOON so
+    # the spoon->grams conversion is demonstrable end to end (panel comment #1):
+    #   1 tbsp sugar = 12.5 g  (density 0.845)
+    #   1 tsp  salt  ≈ 5.9 g   (density 1.2)
+    # Prepare 1 serving and watch Sugar drop 12.5 g and Salt ~5.9 g.
+    ("Caramel Sauce", "Dessert", 4,
+     "1. Measure the sugar by the tablespoon into a heavy saucepan.\n"
+     "2. Heat over low, stirring, until the sugar melts and turns amber.\n"
+     "3. Add a teaspoon of salt to balance the sweetness; swirl to combine.\n"
+     "4. Remove from heat and cool slightly. Drizzle over leche flan or desserts.",
+     [("Sugar", 1, "tbsp"), ("Salt", 1, "tsp")]),
+
+    # Leche Flan measures its caramel sugar by the TABLESPOON and a pinch of salt
+    # by the TEASPOON, so the spoon->grams conversion is demonstrable on a familiar
+    # dessert (panel comment #1):
+    #   1 tbsp sugar = 12.5 g  (density 0.845)  → 2 tbsp   = 25 g
+    #   1 tsp  salt  ≈ 5.9 g   (density 1.2)    → 0.25 tsp ≈ 1.5 g
+    # Prepare 1 serving and watch Sugar drop ~25 g and Salt ~1.5 g.
     ("Leche Flan", "Dessert", 6,
-     "1. Caramelize sugar in a llanera mold over low heat until amber; swirl to coat.\n"
-     "2. Beat egg yolks with evaporated milk, condensed milk, and a squeeze of calamansi.\n"
+     "1. Caramelize the sugar (measured by the tablespoon) in a llanera mold over low heat until amber; swirl to coat.\n"
+     "2. Beat egg yolks with evaporated milk, condensed milk, and a pinch of salt.\n"
      "3. Strain the custard into the caramelized mold.\n"
      "4. Cover with foil and steam over low heat 30-35 minutes until set.\n"
      "5. Cool completely, then invert onto a plate. Serve chilled.",
      [("Egg", 4, "pcs"), ("Evaporated Milk", 100, "ml"), ("Condensed Milk", 50, "ml"),
-      ("Sugar", 80, "g"), ("Calamansi", 0.3, "pcs")]),
+      ("Sugar", 2, "tbsp"), ("Salt", 0.25, "tsp")]),
 
     ("Bibingka", "Dessert", 4,
      "1. Mix rice flour, sugar, and a pinch of salt.\n"
@@ -638,7 +690,7 @@ SEED_RECIPES = [
      "4. Scoop young coconut flesh into strips; reserve coconut water.\n"
      "5. Mix coconut flesh, gulaman, sago, condensed milk, all-purpose cream, "
      "and coconut water. Chill and serve cold.",
-     [("Young Coconut", 0.25, "pcs"), ("Pandan Leaf", 0.5, "pcs"),
+     [("Young Coconut", 1, "pcs"), ("Pandan Leaf", 1, "pcs"),
       ("Gulaman", 5, "g"), ("Sago Pearl", 5, "g"),
       ("Condensed Milk", 25, "ml"), ("All-Purpose Cream", 15, "ml"),
       ("Sugar", 10, "g")]),
@@ -794,6 +846,7 @@ def main():
             "measurable": measurable,
             "unitSize": unit_size,
             "usageUnit": usage_unit,
+            "density": suggested_density(name, du),
             "createdAt": fb_fs.SERVER_TIMESTAMP,
             "updatedAt": fb_fs.SERVER_TIMESTAMP,
         }
