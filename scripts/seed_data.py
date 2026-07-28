@@ -2,15 +2,23 @@
 Full seed: Firebase Auth users, Firestore users, products, inventory_batches,
 recipes, and preparations (production history).
 
+Dataset: Italian restaurant (pizzeria + pasta kitchen + wine list).
+Source of truth for the menu and ingredients: data/recipe-and-products.md
+  - 25 pizzas + 25 pasta dishes = 50 recipes
+  - 20 Italian wines stocked as Beverages
+  - Ingredient names below MUST match the recipe ingredient names exactly;
+    the apps match a recipe ingredient to a product by name (case-insensitive).
+
 Design goals:
-  - 4 recipe categories: Appetizer, Main Course, Side Dish, Dessert (24 recipes)
-  - Meat products use specific cuts (Chicken Thigh, Chicken Wings, Beef Shank, etc.)
   - measurable=True  → item can be used in different units (ml, g, L, tbsp…)
                        needs unitSize (how many usageUnits per 1 purchaseUnit)
-  - measurable=False → item is always in pcs (egg, garlic, vegetables, fruits…)
-  - Condiments and dairy tracked in pcs (bottles/cans), usageUnit for recipes = ml/g
-  - used_stock collection seeded with realistic partial-bottle values
-  - Coconut Milk has no batch → OUT OF STOCK
+  - measurable=False → item is always in pcs (egg, dough ball, onion, sage leaf…)
+  - Sauces, oils, broths, cream and wine tracked in pcs (bottles/jars/cartons),
+    usageUnit for recipes = ml or g
+  - Pizzas: servingSize 1 = one whole pizza, quantities are per pizza
+  - Pasta:  servingSize 4 (or 6 for the baked dishes), quantities are per plate
+  - used_stock collection seeded with realistic partial-bottle/jar values
+  - Buffalo Mozzarella has no batch → OUT OF STOCK (Pizza Bufalina = 0)
   - 30 preparation records, 2 seeded users (admin + staff)
   - Idempotent: deterministic doc IDs, safe to re-run
 
@@ -58,7 +66,7 @@ def ts(d):
 
 # Density (g/ml) by product name - MIRRORS DENSITY_DEFAULTS in
 # smartstock-admin/src/lib/units.ts and inventory-native/lib/types/product.ts.
-# Lets a mass-stocked seasoning be measured in tbsp/tsp (1 tbsp sugar = 12.5 g).
+# Lets a mass-stocked seasoning be measured in tbsp/tsp (1 tbsp butter = 13.5 g).
 # Keep these three tables in sync. Only g-based products carry a density.
 import re
 
@@ -105,14 +113,14 @@ SEED_USERS = [
     {
         "email": "admin@gmail.com",
         "password": "@Password123",
-        "fullName": "Smith Doe",
+        "fullName": "Marco Rossi",
         "role": "admin",
         "permissions": _ADMIN_PERMS,
     },
     {
         "email": "staff@gmail.com",
         "password": "@Password123",
-        "fullName": "John Doe",
+        "fullName": "Giulia Bianchi",
         "role": "staff",
         "permissions": _STAFF_PERMS,
     },
@@ -124,119 +132,166 @@ SEED_USERS = [
 #
 # measurable=True  → item can be measured in different units in recipes
 #                    unitSize = how many usageUnits are in 1 displayUnit
-#                    e.g. 1 bottle Soy Sauce = 750ml → unitSize=750, usageUnit="ml"
-#                    e.g. 1 kg Chicken = 1000g       → unitSize=1000, usageUnit="g"
-# measurable=False → item is always pcs in recipes (egg, garlic, vegetables…)
+#                    e.g. 1 bottle Olive Oil = 1000ml → unitSize=1000, usageUnit="ml"
+#                    e.g. 1 kg Guanciale     = 1000g  → unitSize=1000, usageUnit="g"
+# measurable=False → item is always pcs in recipes (egg, dough, onion, sage leaf…)
 #                    unitSize=None, usageUnit="pcs"
 
 SEED_PRODUCTS = [
 
-    # ── Meat (specific cuts) ──────────────────────────────────────────────────
-    # Chicken
-    ("Chicken Breast",    "Meat", "kg",  0.3,  3, True,  1000, "g"),
-    ("Chicken Thigh",     "Meat", "kg",  0.3,  3, True,  1000, "g"),
-    ("Chicken Wings",     "Meat", "kg",  0.3,  3, True,  1000, "g"),
-    ("Chicken Drumstick", "Meat", "kg",  0.3,  3, True,  1000, "g"),
-    ("Chicken Neck",      "Meat", "kg",  0.2,  3, True,  1000, "g"),
-    ("Chicken Feet",      "Meat", "kg",  0.2,  3, True,  1000, "g"),
-    ("Chicken Liver",     "Meat", "kg",  0.2,  2, True,  1000, "g"),
-    # Pork
-    ("Ground Pork",       "Meat", "kg",  0.3,  2, True,  1000, "g"),
-    ("Pork Belly",        "Meat", "kg",  0.5,  3, True,  1000, "g"),
-    ("Pork Ribs",         "Meat", "kg",  0.5,  3, True,  1000, "g"),
-    ("Pork Shoulder",     "Meat", "kg",  0.5,  3, True,  1000, "g"),
-    # Beef
-    ("Beef Brisket",      "Meat", "kg",  0.5,  3, True,  1000, "g"),
-    ("Beef Shank",        "Meat", "kg",  0.5,  3, True,  1000, "g"),
-    ("Ground Beef",       "Meat", "kg",  0.3,  2, True,  1000, "g"),
+    # ── Bakery ────────────────────────────────────────────────────────────────
+    ("Pizza Dough",              "Bakery", "pcs", 15,   3, False, None, "pcs"),
+
+    # ── Meat (Italian cured meats + butchery) ─────────────────────────────────
+    ("Guanciale",                "Meat", "kg", 0.5,  21, True, 1000, "g"),
+    ("Pancetta",                 "Meat", "kg", 0.5,  14, True, 1000, "g"),
+    ("Parma Ham",                "Meat", "kg", 0.3,  14, True, 1000, "g"),
+    ("Prosciutto",               "Meat", "kg", 0.3,  14, True, 1000, "g"),
+    ("Cooked Ham",               "Meat", "kg", 0.5,  10, True, 1000, "g"),
+    ("Salami",                   "Meat", "kg", 0.5,  30, True, 1000, "g"),
+    ("Spicy Calabrese Salami",   "Meat", "kg", 0.5,  30, True, 1000, "g"),
+    ("Italian Sausage",          "Meat", "kg", 1.0,   5, True, 1000, "g"),
+    ("Spicy Italian Sausage",    "Meat", "kg", 0.5,   5, True, 1000, "g"),
+    ("Ground Beef",              "Meat", "kg", 2.0,   3, True, 1000, "g"),
+    ("Wild Boar Meat",           "Meat", "kg", 1.0,   3, True, 1000, "g"),
 
     # ── Seafood ───────────────────────────────────────────────────────────────
-    ("Bangus",            "Seafood",  "kg",  0.3,  2, True,  1000, "g"),
-    ("Shrimp",            "Seafood",  "kg",  0.3,  2, True,  1000, "g"),
+    ("Shrimp",                   "Seafood", "kg",  0.5,   2, True, 1000, "g"),
+    ("Squid Rings",              "Seafood", "kg",  0.5,   2, True, 1000, "g"),
+    ("Mussels",                  "Seafood", "kg",  1.0,   2, True, 1000, "g"),
+    ("Clams",                    "Seafood", "kg",  1.0,   2, True, 1000, "g"),
+    ("Anchovy Fillets",          "Seafood", "pcs", 30,  180, False, None, "pcs"),
+    ("Canned Tuna",              "Seafood", "pcs",  4,  540, True,  160, "g"),   # 160g can
 
-    # ── Vegetables (all pcs - countable, not measurable) ─────────────────────
-    ("Ampalaya",          "Vegetables", "pcs",  2,  5, False, None, "pcs"),
-    ("Bean Sprout",       "Vegetables", "g",   50,  3, True,  1,    "g"),
-    ("Bell Pepper",       "Vegetables", "pcs",  2,  7, False, None, "pcs"),
-    ("Carrot",            "Vegetables", "pcs",  3, 14, False, None, "pcs"),
-    ("Eggplant",          "Vegetables", "pcs",  2,  5, False, None, "pcs"),
-    ("Garlic",            "Vegetables", "pcs",  5, 30, False, None, "pcs"),
-    ("Ginger",            "Vegetables", "pcs",  3, 14, False, None, "pcs"),
-    ("Green Papaya",      "Vegetables", "pcs",  1,  7, False, None, "pcs"),
-    ("Kalabasa",          "Vegetables", "pcs",  1,  7, False, None, "pcs"),
-    ("Kangkong",          "Vegetables", "pcs",  2,  3, False, None, "pcs"),
-    ("Okra",              "Vegetables", "pcs",  5,  5, False, None, "pcs"),
-    ("Onion",             "Vegetables", "pcs",  5, 14, False, None, "pcs"),
-    ("Pechay",            "Vegetables", "pcs",  2,  3, False, None, "pcs"),
-    ("Potato",            "Vegetables", "pcs",  3, 10, False, None, "pcs"),
-    ("Sitaw",             "Vegetables", "pcs",  5,  5, False, None, "pcs"),
-    ("Tomato",            "Vegetables", "pcs",  5,  5, False, None, "pcs"),
+    # ── Dairy (the cheese wall) ───────────────────────────────────────────────
+    ("Fresh Mozzarella",         "Dairy", "kg",  1.0,   7, True, 1000, "g"),
+    ("Shredded Mozzarella",      "Dairy", "kg",  2.0,  14, True, 1000, "g"),
+    ("Buffalo Mozzarella",       "Dairy", "kg",  0.5,   5, True, 1000, "g"),   # NO BATCH
+    ("Ricotta Cheese",           "Dairy", "kg",  0.5,   7, True, 1000, "g"),
+    ("Ricotta Salata",           "Dairy", "kg",  0.3,  30, True, 1000, "g"),
+    ("Parmesan Cheese",          "Dairy", "kg",  0.5,  90, True, 1000, "g"),
+    ("Pecorino Romano",          "Dairy", "kg",  0.5,  90, True, 1000, "g"),
+    ("Gorgonzola Cheese",        "Dairy", "kg",  0.3,  21, True, 1000, "g"),
+    ("Fontina Cheese",           "Dairy", "kg",  0.3,  30, True, 1000, "g"),
+    ("Heavy Cream",              "Dairy", "pcs", 2,    14, True, 1000, "ml"),  # 1L carton
+    ("Butter",                   "Dairy", "kg",  0.5,  60, True, 1000, "g"),   # density 0.91 → tbsp
+    ("Egg",                      "Dairy", "pcs", 24,   21, False, None, "pcs"),
 
-    # ── Fruits (all pcs) ──────────────────────────────────────────────────────
-    ("Banana",            "Fruits", "pcs",  5,  5, False, None, "pcs"),
-    ("Calamansi",         "Fruits", "pcs",  5,  7, False, None, "pcs"),
-    ("Green Mango",       "Fruits", "pcs",  3,  7, False, None, "pcs"),
-    ("Lemon",             "Fruits", "pcs",  3,  7, False, None, "pcs"),
-    ("Mango",             "Fruits", "pcs",  3,  5, False, None, "pcs"),
-    ("Young Coconut",     "Fruits", "pcs",  2,  5, False, None, "pcs"),
+    # ── Vegetables (fresh produce) ────────────────────────────────────────────
+    ("Garlic",                   "Vegetables", "pcs", 30,  30, False, None, "pcs"),  # cloves
+    ("Yellow Onion",             "Vegetables", "pcs", 10,  30, False, None, "pcs"),
+    ("Red Onion",                "Vegetables", "pcs",  8,  30, False, None, "pcs"),
+    ("Carrot",                   "Vegetables", "pcs", 10,  21, False, None, "pcs"),
+    ("Celery",                   "Vegetables", "pcs",  8,  14, False, None, "pcs"),  # stalks
+    ("Zucchini",                 "Vegetables", "pcs",  6,  10, False, None, "pcs"),
+    ("Eggplant",                 "Vegetables", "pcs",  5,  10, False, None, "pcs"),
+    ("Bell Pepper",              "Vegetables", "pcs",  6,  12, False, None, "pcs"),
+    ("Fresh Tomatoes",           "Vegetables", "pcs", 10,   7, False, None, "pcs"),
+    ("Cherry Tomatoes",          "Vegetables", "g",  300,   7, True,  1,    "g"),
+    ("Mushrooms",                "Vegetables", "g",  500,   7, True,  1,    "g"),
+    ("Spinach",                  "Vegetables", "g",  300,   5, True,  1,    "g"),
+    ("Broccoli Rabe",            "Vegetables", "g",  300,   4, True,  1,    "g"),
+    ("Arugula",                  "Vegetables", "g",  200,   4, True,  1,    "g"),
 
-    # ── Condiments (pcs/bottles/cans - measurable, usageUnit=ml or g) ─────────
-    ("Cooking Oil",       "Condiments", "pcs",  1, 365, True, 1000, "ml"),  # 1L bottle
-    ("Fish Sauce",        "Condiments", "pcs",  1, 365, True,  700, "ml"),  # 700ml bottle
-    ("Liver Spread",      "Condiments", "pcs",  2, 180, True,  100, "g"),   # 100g can
-    ("Oyster Sauce",      "Condiments", "pcs",  1, 180, True,  350, "ml"),  # 350ml bottle
-    ("Sesame Oil",        "Condiments", "pcs",  1, 365, True,  150, "ml"),  # 150ml bottle
-    ("Soy Sauce",         "Condiments", "pcs",  1, 365, True,  750, "ml"),  # 750ml bottle
-    ("Tomato Paste",      "Condiments", "pcs",  2, 180, True,  150, "g"),   # 150g can
-    ("Vinegar",           "Condiments", "pcs",  1, 730, True,  750, "ml"),  # 750ml bottle
+    # ── Seasonings (fresh herbs + dried) ──────────────────────────────────────
+    ("Fresh Basil",              "Seasonings", "g",   80,   4, True,  1,    "g"),
+    ("Fresh Parsley",            "Seasonings", "g",   80,   5, True,  1,    "g"),
+    ("Fresh Rosemary",           "Seasonings", "g",   50,   7, True,  1,    "g"),
+    ("Fresh Sage",               "Seasonings", "pcs", 20,   7, False, None, "pcs"),  # leaves
+    ("Oregano",                  "Seasonings", "g",   50, 365, True,  1,    "g"),
+    ("Chili Flakes",             "Seasonings", "g",   50, 365, True,  1,    "g"),
+    ("Italian Seasoning",        "Seasonings", "g",   50, 365, True,  1,    "g"),
+    ("Fennel Seeds",             "Seasonings", "g",   40, 365, True,  1,    "g"),
+    ("Black Pepper",             "Seasonings", "g",   60, 365, True,  1,    "g"),   # density 0.5 → tsp
+    ("Salt",                     "Seasonings", "g",  300, 730, True,  1,    "g"),
 
-    # ── Dry Goods ─────────────────────────────────────────────────────────────
-    ("All-Purpose Flour", "Dry Goods", "g",   200, 180, True,  1,    "g"),
-    ("Cornstarch",        "Dry Goods", "g",   100, 365, True,  1,    "g"),
-    ("Gulaman",           "Dry Goods", "g",    30, 180, True,  1,    "g"),
-    ("Lumpia Wrapper",    "Dry Goods", "pcs",  10,  30, False, None, "pcs"),
-    ("Mung Bean",         "Dry Goods", "g",   100, 365, True,  1,    "g"),
-    ("Rice",              "Dry Goods", "kg",    2, 180, True,  1000, "g"),
-    ("Rice Flour",        "Dry Goods", "g",   200, 180, True,  1,    "g"),
-    ("Sago Pearl",        "Dry Goods", "g",    50, 365, True,  1,    "g"),
-    ("Sugar",             "Dry Goods", "kg",  0.5, 365, True,  1000, "g"),
-    ("Wonton Wrapper",    "Dry Goods", "pcs",  20,  30, False, None, "pcs"),
+    # ── Condiments (oils) ─────────────────────────────────────────────────────
+    ("Olive Oil",                "Condiments", "pcs", 3, 540, True, 1000, "ml"),  # 1L bottle
+    ("Truffle Oil",              "Condiments", "pcs", 1, 365, True,  100, "ml"),  # 100ml bottle
 
-    # ── Dairy ─────────────────────────────────────────────────────────────────
-    ("All-Purpose Cream", "Dairy", "pcs",  1,  30, True,  250, "ml"),  # 250ml pack
-    ("Coconut Milk",      "Dairy", "pcs",  2,  90, True,  400, "ml"),  # 400ml can - NO BATCH
-    ("Condensed Milk",    "Dairy", "pcs",  2, 365, True,  390, "ml"),  # 390ml can
-    ("Egg",               "Dairy", "pcs",  6,  21, False, None, "pcs"),
-    ("Evaporated Milk",   "Dairy", "pcs",  3, 365, True,  370, "ml"),  # 370ml can
+    # ── Pantry (cans, jars, sauces, broths) ───────────────────────────────────
+    ("Crushed Tomatoes",         "Pantry", "pcs", 12, 540, True,  400, "g"),   # 400g can
+    ("Tomato Sauce",             "Pantry", "pcs",  6, 365, True,  700, "ml"),  # 700ml jar
+    ("Marinara Sauce",           "Pantry", "pcs",  4, 365, True,  700, "ml"),  # 700ml jar
+    ("Tomato Paste",             "Pantry", "pcs",  6, 365, True,  150, "g"),   # 150g tube
+    ("Bechamel Sauce",           "Pantry", "pcs",  4,  30, True,  500, "ml"),  # 500ml pack
+    ("Basil Pesto",              "Pantry", "pcs",  4, 180, True,  190, "g"),   # 190g jar
+    ("Cannellini Beans",         "Pantry", "pcs",  6, 540, True,  400, "g"),   # 400g can
+    ("Artichoke Hearts",         "Pantry", "g",  300, 180, True,  1,    "g"),
+    ("Black Olives",             "Pantry", "g",  300, 180, True,  1,    "g"),
+    ("Capers",                   "Pantry", "g",  150, 365, True,  1,    "g"),
+    ("Sweet Corn",               "Pantry", "g",  300, 365, True,  1,    "g"),
+    ("Pine Nuts",                "Pantry", "g",  150, 180, True,  1,    "g"),
+    ("Breadcrumbs",              "Pantry", "g",  250, 180, True,  1,    "g"),
+    ("Chicken Broth",            "Pantry", "pcs",  4, 365, True, 1000, "ml"),  # 1L carton
+    ("Beef Broth",               "Pantry", "pcs",  4, 365, True, 1000, "ml"),
+    ("Vegetable Broth",          "Pantry", "pcs",  4, 365, True, 1000, "ml"),
 
-    # ── Pantry ────────────────────────────────────────────────────────────────
-    ("Bay Leaf",          "Pantry", "pcs",  5, 180, False, None, "pcs"),
-    ("Black Pepper",      "Pantry", "g",   30, 365, True,  1,    "g"),
-    ("Salt",              "Pantry", "g",  100, 730, True,  1,    "g"),
-    ("Tofu",              "Pantry", "pcs",  2,   7, False, None, "pcs"),
+    # ── Dry Goods (dry pasta) ─────────────────────────────────────────────────
+    ("Spaghetti",                "Dry Goods", "kg",  3, 540, True, 1000, "g"),
+    ("Penne",                    "Dry Goods", "kg",  3, 540, True, 1000, "g"),
+    ("Fettuccine",               "Dry Goods", "kg",  2, 540, True, 1000, "g"),
+    ("Tagliatelle",              "Dry Goods", "kg",  2, 540, True, 1000, "g"),
+    ("Linguine",                 "Dry Goods", "kg",  2, 540, True, 1000, "g"),
+    ("Bucatini",                 "Dry Goods", "kg",  2, 540, True, 1000, "g"),
+    ("Tonnarelli",               "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Orecchiette",              "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Pappardelle",              "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Trofie",                   "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Rigatoni",                 "Dry Goods", "kg",  2, 540, True, 1000, "g"),
+    ("Ditalini",                 "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Elbow Macaroni",           "Dry Goods", "kg",  1, 540, True, 1000, "g"),
+    ("Lasagne Sheets",           "Dry Goods", "pcs", 24, 540, False, None, "pcs"),
+    ("Cannelloni Tubes",         "Dry Goods", "pcs", 24, 540, False, None, "pcs"),
+    ("Manicotti Shells",         "Dry Goods", "pcs", 16, 540, False, None, "pcs"),
 
-    # ── Seasonings ────────────────────────────────────────────────────────────
-    ("Annatto Powder",    "Seasonings", "g",   20, 180, True,  1,    "g"),
-    ("Bagoong Alamang",   "Seasonings", "g",   50,  90, True,  1,    "g"),
-    ("Pandan Leaf",       "Seasonings", "pcs",  5,   7, False, None, "pcs"),
+    # ── Frozen (fresh filled pasta, held frozen) ──────────────────────────────
+    ("Tortellini",               "Frozen", "kg", 1, 90, True, 1000, "g"),
+    ("Spinach & Ricotta Ravioli", "Frozen", "kg", 1, 90, True, 1000, "g"),
+    ("Potato Gnocchi",           "Frozen", "kg", 1, 90, True, 1000, "g"),
+
+    # ── Beverages: kitchen alcohol ────────────────────────────────────────────
+    ("Dry White Wine",           "Beverages", "pcs", 3,  730, True, 750, "ml"),
+    ("Red Wine",                 "Beverages", "pcs", 3,  730, True, 750, "ml"),
+    ("Vodka",                    "Beverages", "pcs", 1, 1825, True, 700, "ml"),
+
+    # ── Beverages: the wine list (750ml bottles, sold by bottle/glass) ────────
+    ("Chianti",                     "Beverages", "pcs", 6, 1825, True, 750, "ml"),
+    ("Barolo",                      "Beverages", "pcs", 4, 1825, True, 750, "ml"),
+    ("Barbaresco",                  "Beverages", "pcs", 4, 1825, True, 750, "ml"),
+    ("Brunello di Montalcino",      "Beverages", "pcs", 4, 1825, True, 750, "ml"),
+    ("Amarone della Valpolicella",  "Beverages", "pcs", 4, 1825, True, 750, "ml"),
+    ("Montepulciano d'Abruzzo",     "Beverages", "pcs", 6, 1460, True, 750, "ml"),
+    ("Nero d'Avola",                "Beverages", "pcs", 6, 1460, True, 750, "ml"),
+    ("Primitivo",                   "Beverages", "pcs", 6, 1460, True, 750, "ml"),
+    ("Valpolicella Classico",       "Beverages", "pcs", 6, 1095, True, 750, "ml"),
+    ("Lambrusco",                   "Beverages", "pcs", 6,  730, True, 750, "ml"),
+    ("Pinot Grigio",                "Beverages", "pcs", 8,  730, True, 750, "ml"),
+    ("Soave",                       "Beverages", "pcs", 6,  730, True, 750, "ml"),
+    ("Verdicchio",                  "Beverages", "pcs", 6,  730, True, 750, "ml"),
+    ("Gavi",                        "Beverages", "pcs", 6,  730, True, 750, "ml"),
+    ("Vermentino",                  "Beverages", "pcs", 6,  730, True, 750, "ml"),
+    ("Prosecco",                    "Beverages", "pcs", 8,  730, True, 750, "ml"),
+    ("Franciacorta",                "Beverages", "pcs", 4,  730, True, 750, "ml"),
+    ("Asti Spumante",               "Beverages", "pcs", 4,  730, True, 750, "ml"),
+    ("Moscato d'Asti",              "Beverages", "pcs", 4,  730, True, 750, "ml"),
+    ("Vin Santo",                   "Beverages", "pcs", 3, 1825, True, 750, "ml"),
 ]
 
 
 # ── INVENTORY BATCHES ─────────────────────────────────────────────────────────
-# (product_name, quantity_in_purchase_units, expiry_date, location)
-# Meat/Seafood (kg): quantity in grams (base unit)
-# Condiments/Dairy (pcs): quantity in pieces (bottles/cans/packs)
-# g products: quantity in grams
-# kg dry goods: quantity in grams
+# (product_name, quantity_in_base_units, expiry_date, location)
+# kg products  : quantity in grams
+# g products   : quantity in grams
+# pcs products : quantity in pieces (bottles/cans/jars/dough balls)
 #
-# Intentionally LOW totals:
-#   Ground Pork  400g  (1 batch) → Lumpia Shanghai = 4        ← LOW
-#   Beef Brisket 750g  (2 batches)→ Kare-Kare/Caldereta = 3  ← LOW
-#   Beef Shank   750g  (2 batches)→ Bulalo = 3               ← LOW
-#   Bangus       600g  (1 batch) → Kinilaw = 3               ← LOW
-#   Egg          14pcs (2 batches)→ Leche Flan = 3           ← LOW
-#   Green Mango  6pcs  (2 batches)→ Ensaladang Mangga = 6    ← LOW
-#   Coconut Milk (0 batches)     → Bibingka/Maja Blanca = 0  ← ALERT
+# Intentional shortages, so the alerts and "can cook" counts have something to say:
+#   Buffalo Mozzarella  (no batch)   → Pizza Bufalina        = 0   ← OUT OF STOCK
+#   Wild Boar Meat      800 g        → Pappardelle Cinghiale = 6   ← LOW
+#   Clams               1200 g       → Spaghetti Vongole     = 4   ← LOW
+#   Truffle Oil         1 bottle     → Pizza Tartufata       = 10  ← LOW
+#   Ricotta Salata      300 g        → Pasta alla Norma      = 12  ← LOW
+#   Pizza Dough         26 pcs, 1-3 days out                       ← EXPIRING
 
 def _exp(n):
     return ts(TODAY + datetime.timedelta(days=n))
@@ -244,515 +299,849 @@ def _exp(n):
 
 SEED_BATCHES = [
 
+    # ── Bakery ───────────────────────────────────────────────────────────────
+    ("Pizza Dough",            12, _exp(1),  "Ref A"),
+    ("Pizza Dough",            14, _exp(3),  "Ref A"),
+
     # ── Meat ─────────────────────────────────────────────────────────────────
-
-    # Chicken Thigh - 2 batches (Adobong Manok + Chicken Inasal)
-    ("Chicken Thigh",     1500, _exp(2),  "Freezer A"),
-    ("Chicken Thigh",     1500, _exp(5),  "Freezer A"),
-
-    # Chicken Wings - 2 batches (Tinolang Manok) → ~8 servings (2000g ÷ 250g)
-    ("Chicken Wings",      800, _exp(2),  "Freezer A"),
-    ("Chicken Wings",     1200, _exp(4),  "Freezer A"),
-
-    # Chicken Breast - 2 batches (stock only)
-    ("Chicken Breast",    1000, _exp(2),  "Freezer B"),
-    ("Chicken Breast",    1000, _exp(5),  "Freezer B"),
-
-    # Other chicken cuts - 1 batch each (stock only)
-    ("Chicken Drumstick",  800, _exp(3),  "Freezer B"),
-    ("Chicken Neck",       500, _exp(2),  "Freezer B"),
-    ("Chicken Feet",       500, _exp(3),  "Freezer B"),
-    ("Chicken Liver",      400, _exp(2),  "Freezer B"),
-
-    # Pork
-    ("Pork Belly",        1500, _exp(1),  "Freezer A"),
-    ("Pork Belly",        1500, _exp(3),  "Freezer A"),
-    ("Pork Belly",        1500, _exp(5),  "Freezer B"),
-    ("Ground Pork",        450, _exp(1),  "Freezer B"),   # → ~9 servings Lumpia Shanghai (900g ÷ 100g)
-    ("Ground Pork",        450, _exp(3),  "Freezer B"),
-    ("Pork Ribs",         1000, _exp(3),  "Freezer A"),
-    ("Pork Shoulder",     1500, _exp(4),  "Freezer A"),
-
-    # Beef - Brisket (Kare-Kare ~10, Caldereta ~12), Shank (Bulalo ~8)
-    ("Beef Brisket",       800, _exp(2),  "Freezer A"),   # total = 2500g → Kare-Kare=10, Caldereta=12
-    ("Beef Brisket",       900, _exp(4),  "Freezer A"),
-    ("Beef Brisket",       800, _exp(7),  "Freezer A"),
-    ("Beef Shank",        1000, _exp(2),  "Freezer A"),   # total = 2000g → Bulalo=8
-    ("Beef Shank",        1000, _exp(5),  "Freezer A"),
-    ("Ground Beef",        600, _exp(2),  "Freezer B"),
+    ("Guanciale",            1200, _exp(10), "Ref B"),
+    ("Guanciale",             900, _exp(18), "Ref B"),
+    ("Pancetta",             1000, _exp(8),  "Ref B"),
+    ("Pancetta",              800, _exp(14), "Ref B"),
+    ("Parma Ham",             600, _exp(6),  "Ref B"),
+    ("Parma Ham",             700, _exp(12), "Ref B"),
+    ("Prosciutto",            600, _exp(5),  "Ref B"),
+    ("Prosciutto",            800, _exp(11), "Ref B"),
+    ("Cooked Ham",           1200, _exp(4),  "Ref B"),
+    ("Cooked Ham",           1500, _exp(9),  "Ref B"),
+    ("Salami",                900, _exp(20), "Ref B"),
+    ("Salami",                800, _exp(28), "Ref B"),
+    ("Spicy Calabrese Salami", 900, _exp(15), "Ref B"),
+    ("Spicy Calabrese Salami", 900, _exp(26), "Ref B"),
+    ("Italian Sausage",      2000, _exp(3),  "Freezer A"),
+    ("Italian Sausage",      2200, _exp(5),  "Freezer A"),
+    ("Spicy Italian Sausage", 1500, _exp(4), "Freezer A"),
+    ("Ground Beef",          2500, _exp(2),  "Freezer A"),
+    ("Ground Beef",          2500, _exp(3),  "Freezer A"),
+    ("Wild Boar Meat",        800, _exp(2),  "Freezer B"),   # total 800g → 6 servings  ← LOW
 
     # ── Seafood ──────────────────────────────────────────────────────────────
-    ("Bangus",             800, _exp(1),  "Freezer B"),   # total = 1600g → Kinilaw=8
-    ("Bangus",             800, _exp(3),  "Freezer B"),
-    ("Shrimp",             500, _exp(1),  "Freezer B"),
-    ("Shrimp",             600, _exp(3),  "Freezer B"),
+    ("Shrimp",               1200, _exp(1),  "Freezer B"),
+    ("Shrimp",               1000, _exp(2),  "Freezer B"),
+    ("Squid Rings",          1000, _exp(1),  "Freezer B"),
+    ("Squid Rings",           900, _exp(2),  "Freezer B"),
+    ("Mussels",              1500, _exp(1),  "Freezer B"),
+    ("Mussels",              1500, _exp(2),  "Freezer B"),
+    ("Clams",                1200, _exp(1),  "Freezer B"),   # total 1200g → 4 servings ← LOW
+    ("Anchovy Fillets",        60, _exp(120), "Pantry"),
+    ("Anchovy Fillets",        80, _exp(170), "Pantry"),
+    ("Canned Tuna",             8, _exp(400), "Pantry"),
+    ("Canned Tuna",            10, _exp(500), "Pantry"),
 
-    # ── Vegetables (pcs) ─────────────────────────────────────────────────────
-    ("Eggplant",             5, _exp(3),  "Shelf 1"),
-    ("Eggplant",             6, _exp(6),  "Shelf 1"),
-    ("Kangkong",             5, _exp(2),  "Shelf 1"),
-    ("Kangkong",             6, _exp(4),  "Shelf 1"),
-    ("Ampalaya",             4, _exp(3),  "Shelf 1"),
-    ("Ampalaya",             5, _exp(7),  "Shelf 1"),
-    ("Okra",                14, _exp(3),  "Shelf 1"),
-    ("Okra",                18, _exp(6),  "Shelf 1"),
-    ("Kalabasa",             2, _exp(5),  "Shelf 2"),
-    ("Kalabasa",             3, _exp(10), "Shelf 2"),
-    ("Pechay",               5, _exp(2),  "Shelf 1"),
-    ("Pechay",               6, _exp(4),  "Shelf 1"),
-    ("Sitaw",               18, _exp(3),  "Shelf 1"),   # total = 36pcs → Ginisang Sitaw=7
-    ("Sitaw",               18, _exp(6),  "Shelf 1"),
-    ("Onion",                7, _exp(10), "Shelf 3"),
-    ("Onion",                8, _exp(20), "Shelf 3"),
-    ("Onion",                7, _exp(30), "Shelf 3"),
-    ("Garlic",              10, _exp(20), "Shelf 3"),
-    ("Garlic",              12, _exp(35), "Shelf 3"),
-    ("Garlic",              10, _exp(50), "Shelf 3"),
-    ("Ginger",               5, _exp(10), "Shelf 3"),
-    ("Ginger",               6, _exp(20), "Shelf 3"),
-    ("Tomato",              10, _exp(3),  "Shelf 2"),
-    ("Tomato",              12, _exp(6),  "Shelf 2"),
-    ("Green Papaya",         2, _exp(5),  "Shelf 2"),
-    ("Green Papaya",         3, _exp(12), "Shelf 2"),
-    ("Carrot",               8, _exp(10), "Shelf 2"),
-    ("Carrot",               8, _exp(20), "Shelf 2"),
-    ("Bell Pepper",          5, _exp(5),  "Shelf 2"),
-    ("Bell Pepper",          6, _exp(10), "Shelf 2"),
-    ("Potato",              10, _exp(7),  "Shelf 2"),
-    ("Potato",              12, _exp(15), "Shelf 2"),
-    ("Bean Sprout",        400, _exp(3),  "Ref A"),        # g → Ukoy=8, Lumpiang Sariwa=13
+    # ── Dairy ────────────────────────────────────────────────────────────────
+    # Buffalo Mozzarella: intentionally absent → OUT OF STOCK
+    ("Fresh Mozzarella",     2000, _exp(3),  "Ref A"),
+    ("Fresh Mozzarella",     2000, _exp(6),  "Ref A"),
+    ("Shredded Mozzarella",  4000, _exp(8),  "Ref A"),
+    ("Shredded Mozzarella",  4000, _exp(12), "Ref A"),
+    ("Shredded Mozzarella",  3000, _exp(14), "Ref A"),
+    ("Ricotta Cheese",       1500, _exp(4),  "Ref A"),
+    ("Ricotta Cheese",       1500, _exp(7),  "Ref A"),
+    ("Ricotta Salata",        300, _exp(25), "Ref A"),        # → Norma = 12 ← LOW
+    ("Parmesan Cheese",      2000, _exp(60), "Ref A"),
+    ("Parmesan Cheese",      2000, _exp(90), "Ref A"),
+    ("Pecorino Romano",      1500, _exp(55), "Ref A"),
+    ("Pecorino Romano",      1500, _exp(85), "Ref A"),
+    ("Gorgonzola Cheese",     800, _exp(12), "Ref A"),
+    ("Gorgonzola Cheese",     800, _exp(20), "Ref A"),
+    ("Fontina Cheese",        700, _exp(15), "Ref A"),
+    ("Fontina Cheese",        700, _exp(28), "Ref A"),
+    ("Heavy Cream",             5, _exp(7),  "Ref A"),
+    ("Heavy Cream",             5, _exp(13), "Ref A"),
+    ("Butter",               2000, _exp(30), "Ref A"),
+    ("Butter",               2000, _exp(55), "Ref A"),
+    ("Egg",                    60, _exp(12), "Ref A"),
+    ("Egg",                    60, _exp(20), "Ref A"),
 
-    # ── Fruits (pcs) ─────────────────────────────────────────────────────────
-    ("Banana",               6, _exp(2),  "Shelf 2"),
-    ("Banana",               8, _exp(4),  "Shelf 2"),
-    ("Banana",               7, _exp(7),  "Shelf 2"),
-    ("Mango",                5, _exp(3),  "Shelf 2"),
-    ("Mango",                6, _exp(6),  "Shelf 2"),
-    ("Calamansi",           12, _exp(5),  "Shelf 2"),
-    ("Calamansi",           15, _exp(12), "Shelf 2"),
-    ("Green Mango",          4, _exp(5),  "Shelf 2"),      # total = 8pcs → Ensaladang Mangga=8
-    ("Green Mango",          4, _exp(10), "Shelf 2"),
-    ("Young Coconut",        2, _exp(3),  "Ref A"),   # total = 5pcs → Buko Pandan=20
-    ("Young Coconut",        3, _exp(7),  "Ref A"),
-    ("Lemon",                7, _exp(5),  "Shelf 2"),
-    ("Lemon",                9, _exp(12), "Shelf 2"),
-
-    # ── Condiments (pcs - bottles/cans) ──────────────────────────────────────
-    # Cooking Oil (1L bottle)
-    ("Cooking Oil",          2, _exp(300), "Pantry"),
-    ("Cooking Oil",          2, _exp(365), "Pantry"),
-    ("Cooking Oil",          2, _exp(400), "Pantry"),
-    # Soy Sauce (750ml bottle)
-    ("Soy Sauce",            2, _exp(300), "Pantry"),
-    ("Soy Sauce",            2, _exp(365), "Pantry"),
-    ("Soy Sauce",            2, _exp(400), "Pantry"),
-    # Vinegar (750ml bottle)
-    ("Vinegar",              2, _exp(600), "Pantry"),
-    ("Vinegar",              3, _exp(730), "Pantry"),
-    # Fish Sauce (700ml bottle)
-    ("Fish Sauce",           1, _exp(300), "Pantry"),
-    ("Fish Sauce",           2, _exp(365), "Pantry"),
-    # Oyster Sauce (350ml bottle)
-    ("Oyster Sauce",         1, _exp(150), "Pantry"),
-    ("Oyster Sauce",         2, _exp(200), "Pantry"),
-    # Sesame Oil (150ml bottle) - 1 batch
-    ("Sesame Oil",           1, _exp(365), "Pantry"),
-    # Tomato Paste (150g can)
-    ("Tomato Paste",         2, _exp(150), "Pantry"),
-    ("Tomato Paste",         2, _exp(200), "Pantry"),
-    # Liver Spread (100g can)
-    ("Liver Spread",         2, _exp(150), "Pantry"),
-    ("Liver Spread",         2, _exp(200), "Pantry"),
-
-    # ── Dry Goods ────────────────────────────────────────────────────────────
-    ("Rice",              7000, _exp(150), "Pantry"),
-    ("Rice",              7000, _exp(180), "Pantry"),
-    ("Rice",              7000, _exp(210), "Pantry"),
-    ("All-Purpose Flour",  800, _exp(150), "Pantry"),
-    ("All-Purpose Flour", 1200, _exp(200), "Pantry"),
-    ("Sugar",             1600, _exp(300), "Pantry"),
-    ("Sugar",             1800, _exp(365), "Pantry"),
-    ("Sugar",             1700, _exp(400), "Pantry"),
-    ("Cornstarch",         250, _exp(300), "Pantry"),
-    ("Cornstarch",         280, _exp(365), "Pantry"),
-    ("Rice Flour",        1000, _exp(150), "Pantry"),
-    ("Rice Flour",        1200, _exp(200), "Pantry"),
-    ("Mung Bean",          250, _exp(300), "Pantry"),
-    ("Mung Bean",          280, _exp(365), "Pantry"),
-    ("Sago Pearl",         150, _exp(300), "Pantry"),
-    ("Sago Pearl",         180, _exp(365), "Pantry"),
-    ("Gulaman",            100, _exp(150), "Pantry"),
-    ("Gulaman",            120, _exp(200), "Pantry"),
-    ("Wonton Wrapper",      40, _exp(20),  "Pantry"),
-    ("Wonton Wrapper",      45, _exp(45),  "Pantry"),
-    ("Lumpia Wrapper",      40, _exp(20),  "Pantry"),
-    ("Lumpia Wrapper",      45, _exp(45),  "Pantry"),
-
-    # ── Dairy (pcs - cans/packs) - Coconut Milk absent → OUT OF STOCK ────────
-    ("Egg",                 15, _exp(14),  "Ref A"),   # total = 35pcs → Leche Flan=8
-    ("Egg",                 20, _exp(25),  "Ref A"),
-    ("Evaporated Milk",      4, _exp(300), "Pantry"),
-    ("Evaporated Milk",      4, _exp(365), "Pantry"),
-    ("Condensed Milk",       2, _exp(300), "Pantry"),
-    ("Condensed Milk",       2, _exp(365), "Pantry"),
-    ("All-Purpose Cream",    1, _exp(20),  "Ref A"),
-    ("All-Purpose Cream",    1, _exp(35),  "Ref A"),
-
-    # ── Pantry ───────────────────────────────────────────────────────────────
-    ("Salt",               650, _exp(600), "Pantry"),
-    ("Salt",               700, _exp(680), "Pantry"),
-    ("Salt",               700, _exp(730), "Pantry"),
-    ("Black Pepper",       220, _exp(300), "Pantry"),
-    ("Black Pepper",       280, _exp(365), "Pantry"),
-    ("Bay Leaf",            25, _exp(150), "Pantry"),
-    ("Bay Leaf",            30, _exp(200), "Pantry"),
-    ("Tofu",                 3, _exp(5),   "Ref A"),
-    ("Tofu",                 3, _exp(10),  "Ref A"),
+    # ── Vegetables ───────────────────────────────────────────────────────────
+    ("Garlic",                120, _exp(14), "Shelf 1"),
+    ("Garlic",                150, _exp(26), "Shelf 1"),
+    ("Yellow Onion",           30, _exp(12), "Shelf 1"),
+    ("Yellow Onion",           35, _exp(25), "Shelf 1"),
+    ("Red Onion",              20, _exp(12), "Shelf 1"),
+    ("Red Onion",              25, _exp(25), "Shelf 1"),
+    ("Carrot",                 24, _exp(9),  "Ref C"),
+    ("Carrot",                 28, _exp(18), "Ref C"),
+    ("Celery",                 20, _exp(6),  "Ref C"),
+    ("Celery",                 22, _exp(12), "Ref C"),
+    ("Zucchini",               14, _exp(4),  "Ref C"),
+    ("Zucchini",               16, _exp(9),  "Ref C"),
+    ("Eggplant",               12, _exp(4),  "Ref C"),
+    ("Eggplant",               14, _exp(9),  "Ref C"),
+    ("Bell Pepper",            16, _exp(5),  "Ref C"),
+    ("Bell Pepper",            18, _exp(11), "Ref C"),
+    ("Fresh Tomatoes",         20, _exp(3),  "Ref C"),
+    ("Fresh Tomatoes",         24, _exp(6),  "Ref C"),
+    ("Cherry Tomatoes",       800, _exp(3),  "Ref C"),
+    ("Cherry Tomatoes",       900, _exp(6),  "Ref C"),
+    ("Mushrooms",            2000, _exp(3),  "Ref C"),
+    ("Mushrooms",            2000, _exp(6),  "Ref C"),
+    ("Spinach",              1000, _exp(2),  "Ref C"),
+    ("Spinach",               900, _exp(4),  "Ref C"),
+    ("Broccoli Rabe",         900, _exp(2),  "Ref C"),
+    ("Broccoli Rabe",         800, _exp(4),  "Ref C"),
+    ("Arugula",               500, _exp(2),  "Ref C"),
+    ("Arugula",               400, _exp(4),  "Ref C"),
 
     # ── Seasonings ───────────────────────────────────────────────────────────
-    ("Annatto Powder",     100, _exp(150), "Pantry"),
-    ("Annatto Powder",     120, _exp(200), "Pantry"),
-    ("Bagoong Alamang",    250, _exp(75),  "Ref A"),
-    ("Bagoong Alamang",    280, _exp(100), "Ref A"),
-    ("Pandan Leaf",         10, _exp(5),   "Ref A"),
-    ("Pandan Leaf",         12, _exp(10),  "Ref A"),
+    ("Fresh Basil",           250, _exp(2),  "Ref C"),
+    ("Fresh Basil",           250, _exp(4),  "Ref C"),
+    ("Fresh Parsley",         250, _exp(3),  "Ref C"),
+    ("Fresh Parsley",         200, _exp(5),  "Ref C"),
+    ("Fresh Rosemary",        150, _exp(5),  "Ref C"),
+    ("Fresh Sage",             60, _exp(4),  "Ref C"),
+    ("Fresh Sage",             60, _exp(7),  "Ref C"),
+    ("Oregano",               300, _exp(200), "Pantry"),
+    ("Oregano",               300, _exp(320), "Pantry"),
+    ("Chili Flakes",          250, _exp(220), "Pantry"),
+    ("Chili Flakes",          250, _exp(340), "Pantry"),
+    ("Italian Seasoning",     250, _exp(240), "Pantry"),
+    ("Fennel Seeds",          200, _exp(260), "Pantry"),
+    ("Black Pepper",          400, _exp(200), "Pantry"),
+    ("Black Pepper",          400, _exp(330), "Pantry"),
+    ("Salt",                 2000, _exp(500), "Pantry"),
+    ("Salt",                 2000, _exp(700), "Pantry"),
+
+    # ── Condiments ───────────────────────────────────────────────────────────
+    ("Olive Oil",               6, _exp(300), "Pantry"),
+    ("Olive Oil",               6, _exp(450), "Pantry"),
+    ("Olive Oil",               6, _exp(520), "Pantry"),
+    ("Truffle Oil",             1, _exp(300), "Pantry"),      # 1 bottle → Tartufata = 10 ← LOW
+
+    # ── Pantry ───────────────────────────────────────────────────────────────
+    ("Crushed Tomatoes",       36, _exp(300), "Pantry"),
+    ("Crushed Tomatoes",       36, _exp(430), "Pantry"),
+    ("Crushed Tomatoes",       24, _exp(520), "Pantry"),
+    ("Tomato Sauce",           18, _exp(200), "Pantry"),
+    ("Tomato Sauce",           18, _exp(300), "Pantry"),
+    ("Tomato Sauce",           12, _exp(350), "Pantry"),
+    ("Marinara Sauce",          8, _exp(240), "Pantry"),
+    ("Marinara Sauce",          8, _exp(330), "Pantry"),
+    ("Tomato Paste",           12, _exp(250), "Pantry"),
+    ("Tomato Paste",           12, _exp(340), "Pantry"),
+    ("Bechamel Sauce",          8, _exp(12),  "Ref A"),
+    ("Bechamel Sauce",          8, _exp(25),  "Ref A"),
+    ("Basil Pesto",            10, _exp(90),  "Pantry"),
+    ("Basil Pesto",            10, _exp(160), "Pantry"),
+    ("Cannellini Beans",       18, _exp(300), "Pantry"),
+    ("Cannellini Beans",       18, _exp(480), "Pantry"),
+    ("Artichoke Hearts",     1200, _exp(90),  "Pantry"),
+    ("Artichoke Hearts",     1200, _exp(160), "Pantry"),
+    ("Black Olives",         1500, _exp(100), "Pantry"),
+    ("Black Olives",         1500, _exp(170), "Pantry"),
+    ("Capers",                600, _exp(200), "Pantry"),
+    ("Capers",                600, _exp(330), "Pantry"),
+    ("Sweet Corn",           1000, _exp(220), "Pantry"),
+    ("Sweet Corn",           1000, _exp(340), "Pantry"),
+    ("Pine Nuts",             500, _exp(90),  "Pantry"),
+    ("Pine Nuts",             500, _exp(160), "Pantry"),
+    ("Breadcrumbs",          1000, _exp(100), "Pantry"),
+    ("Breadcrumbs",          1000, _exp(170), "Pantry"),
+    ("Chicken Broth",          10, _exp(200), "Pantry"),
+    ("Chicken Broth",          10, _exp(330), "Pantry"),
+    ("Beef Broth",              8, _exp(210), "Pantry"),
+    ("Beef Broth",              8, _exp(340), "Pantry"),
+    ("Vegetable Broth",         8, _exp(220), "Pantry"),
+    ("Vegetable Broth",         8, _exp(350), "Pantry"),
+
+    # ── Dry Goods ────────────────────────────────────────────────────────────
+    ("Spaghetti",            10000, _exp(300), "Pantry"),
+    ("Spaghetti",            10000, _exp(480), "Pantry"),
+    ("Penne",                 8000, _exp(300), "Pantry"),
+    ("Penne",                 8000, _exp(480), "Pantry"),
+    ("Fettuccine",            6000, _exp(320), "Pantry"),
+    ("Fettuccine",            5000, _exp(500), "Pantry"),
+    ("Tagliatelle",           5000, _exp(320), "Pantry"),
+    ("Tagliatelle",           5000, _exp(500), "Pantry"),
+    ("Linguine",              5000, _exp(310), "Pantry"),
+    ("Linguine",              5000, _exp(490), "Pantry"),
+    ("Bucatini",              4000, _exp(310), "Pantry"),
+    ("Bucatini",              4000, _exp(490), "Pantry"),
+    ("Tonnarelli",            3000, _exp(300), "Pantry"),
+    ("Tonnarelli",            2000, _exp(470), "Pantry"),
+    ("Orecchiette",           3000, _exp(300), "Pantry"),
+    ("Orecchiette",           2000, _exp(470), "Pantry"),
+    ("Pappardelle",           3000, _exp(300), "Pantry"),
+    ("Pappardelle",           2000, _exp(470), "Pantry"),
+    ("Trofie",                3000, _exp(300), "Pantry"),
+    ("Trofie",                2000, _exp(470), "Pantry"),
+    ("Rigatoni",              5000, _exp(310), "Pantry"),
+    ("Rigatoni",              4000, _exp(490), "Pantry"),
+    ("Ditalini",              3000, _exp(320), "Pantry"),
+    ("Elbow Macaroni",        3000, _exp(320), "Pantry"),
+    ("Lasagne Sheets",          96, _exp(300), "Pantry"),
+    ("Lasagne Sheets",          96, _exp(460), "Pantry"),
+    ("Cannelloni Tubes",        72, _exp(300), "Pantry"),
+    ("Cannelloni Tubes",        72, _exp(460), "Pantry"),
+    ("Manicotti Shells",        48, _exp(300), "Pantry"),
+    ("Manicotti Shells",        48, _exp(460), "Pantry"),
+
+    # ── Frozen ───────────────────────────────────────────────────────────────
+    ("Tortellini",            3000, _exp(40), "Freezer A"),
+    ("Tortellini",            3000, _exp(75), "Freezer A"),
+    ("Spinach & Ricotta Ravioli", 3000, _exp(40), "Freezer A"),
+    ("Spinach & Ricotta Ravioli", 2500, _exp(75), "Freezer A"),
+    ("Potato Gnocchi",        3000, _exp(45), "Freezer A"),
+    ("Potato Gnocchi",        2500, _exp(80), "Freezer A"),
+
+    # ── Beverages: kitchen alcohol ───────────────────────────────────────────
+    ("Dry White Wine",           6, _exp(400), "Cellar"),
+    ("Dry White Wine",           6, _exp(650), "Cellar"),
+    ("Red Wine",                 6, _exp(500), "Cellar"),
+    ("Red Wine",                 6, _exp(700), "Cellar"),
+    ("Vodka",                    2, _exp(1500), "Bar"),
+
+    # ── Beverages: wine list ─────────────────────────────────────────────────
+    ("Chianti",                 12, _exp(1200), "Cellar"),
+    ("Chianti",                 12, _exp(1700), "Cellar"),
+    ("Barolo",                   6, _exp(1500), "Cellar"),
+    ("Barolo",                   6, _exp(1800), "Cellar"),
+    ("Barbaresco",               6, _exp(1500), "Cellar"),
+    ("Brunello di Montalcino",   6, _exp(1600), "Cellar"),
+    ("Amarone della Valpolicella", 6, _exp(1600), "Cellar"),
+    ("Montepulciano d'Abruzzo", 12, _exp(1100), "Cellar"),
+    ("Nero d'Avola",            12, _exp(1100), "Cellar"),
+    ("Primitivo",               12, _exp(1150), "Cellar"),
+    ("Valpolicella Classico",   10, _exp(900),  "Cellar"),
+    ("Lambrusco",               10, _exp(600),  "Cellar"),
+    ("Pinot Grigio",            18, _exp(550),  "Cellar"),
+    ("Pinot Grigio",            12, _exp(700),  "Cellar"),
+    ("Soave",                   12, _exp(560),  "Cellar"),
+    ("Verdicchio",              12, _exp(570),  "Cellar"),
+    ("Gavi",                    10, _exp(580),  "Cellar"),
+    ("Vermentino",              10, _exp(590),  "Cellar"),
+    ("Prosecco",                18, _exp(500),  "Cellar"),
+    ("Prosecco",                12, _exp(650),  "Cellar"),
+    ("Franciacorta",             8, _exp(660),  "Cellar"),
+    ("Asti Spumante",            8, _exp(620),  "Cellar"),
+    ("Moscato d'Asti",           8, _exp(610),  "Cellar"),
+    ("Vin Santo",                6, _exp(1700), "Cellar"),
 ]
 
 
 # ── RECIPES ───────────────────────────────────────────────────────────────────
 # (name, category, serving_size, instructions, [(ingredient, qty_per_serving, unit), ...])
 #
-# Recipe ingredient units are always in usageUnit:
-#   measurable products → ml, g, kg (recipe system converts from pcs via unitSize)
-#   non-measurable (pcs) → pcs only
+# Recipe ingredient units are always the product's usageUnit (or a spoon unit the
+# conversion table can reach):
+#   measurable products → ml / g (the recipe system converts from pcs via unitSize)
+#   non-measurable      → pcs only
 #
-# Meat cuts changed:
-#   Adobong Manok   : "Chicken" → "Chicken Thigh"
-#   Tinolang Manok  : "Chicken" → "Chicken Wings"
-#   Chicken Inasal  : "Chicken" → "Chicken Thigh"
-#   Bulalo          : "Beef Brisket" → "Beef Shank"
+# Serving conventions:
+#   Pizzas  : servingSize 1 → 1 serving = 1 whole pizza, quantities are per pizza.
+#   Pasta   : servingSize 4 (6 for the baked trays) → quantities are per plate.
+#
+# Spoon units are used where a cook would reach for a spoon, which exercises the
+# ml<->g conversion end to end:
+#   Olive Oil / Truffle Oil (ml stock)  → tbsp is pure volume, no density needed
+#   Butter      (g stock, density 0.91) → 1 tbsp = 13.5 g
+#   Black Pepper(g stock, density 0.5)  → 1 tsp  = 2.5 g
 
 SEED_RECIPES = [
 
-    # ── APPETIZER (4) ────────────────────────────────────────────────────────
+    # ══ PIZZAS (25) ══════════════════════════════════════════════════════════
 
-    ("Lumpia Shanghai", "Appetizer", 10,
-     "1. Combine ground pork, onion, garlic, salt, and pepper in a bowl.\n"
-     "2. Beat egg and fold into the filling.\n"
-     "3. Place 1 tbsp of filling on a spring roll wrapper and roll tightly.\n"
-     "4. Seal edges with a flour-water paste.\n"
-     "5. Deep-fry in hot cooking oil until golden and crispy. Drain and serve.",
-     [("Ground Pork", 100, "g"), ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
-      ("Egg", 1, "pcs"), ("All-Purpose Flour", 20, "g"),
-      ("Salt", 2, "g"), ("Black Pepper", 1, "g"), ("Cooking Oil", 20, "ml")]),
+    ("Pizza Margherita", "Main Course", 1,
+     "1. Preheat the oven to 250°C (480°F).\n"
+     "2. Roll out the pizza dough.\n"
+     "3. Spread tomato sauce evenly over the dough.\n"
+     "4. Add mozzarella slices.\n"
+     "5. Bake for 10-12 minutes until the crust is golden.\n"
+     "6. Top with fresh basil, drizzle with olive oil and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Fresh Mozzarella", 200, "g"),
+      ("Fresh Basil", 5, "g"), ("Olive Oil", 2, "tbsp"), ("Salt", 1, "g")]),
 
-    ("Siomai", "Appetizer", 8,
-     "1. Mix ground pork, shrimp, carrot, onion, garlic, egg, cornstarch, "
-     "sesame oil, oyster sauce, salt, and pepper until combined.\n"
-     "2. Place 1 heaping teaspoon of filling in each wonton wrapper.\n"
-     "3. Fold and pleat the edges to form a cup, leaving the top open.\n"
-     "4. Arrange in a greased steamer basket.\n"
-     "5. Steam over medium heat for 15-18 minutes. Serve with soy sauce and calamansi.",
-     [("Ground Pork", 40, "g"), ("Shrimp", 20, "g"), ("Wonton Wrapper", 1, "pcs"),
-      ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"), ("Carrot", 1, "pcs"),
-      ("Egg", 1, "pcs"), ("Cornstarch", 5, "g"), ("Sesame Oil", 1, "ml"),
-      ("Oyster Sauce", 3, "ml"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+    ("Pizza Marinara", "Main Course", 1,
+     "1. Preheat the oven to 250°C (480°F).\n"
+     "2. Roll out the dough and spread tomato sauce over the base.\n"
+     "3. Add the thinly sliced garlic and oregano.\n"
+     "4. Drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes.\n"
+     "6. Garnish with fresh basil and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Garlic", 3, "pcs"),
+      ("Olive Oil", 2, "tbsp"), ("Oregano", 1, "g"), ("Fresh Basil", 3, "g")]),
 
-    ("Ukoy", "Appetizer", 4,
-     "1. Whisk together flour, egg, salt, and enough water to make a thin batter.\n"
-     "2. Add bean sprouts and minced garlic; mix well.\n"
-     "3. Place whole shrimp on each fritter portion.\n"
-     "4. Drop spoonfuls into hot cooking oil and press flat.\n"
-     "5. Fry until golden and crispy on both sides. Serve with spiced vinegar.",
-     [("Shrimp", 100, "g"), ("Bean Sprout", 50, "g"), ("All-Purpose Flour", 30, "g"),
-      ("Egg", 1, "pcs"), ("Garlic", 1, "pcs"),
-      ("Salt", 1, "g"), ("Cooking Oil", 20, "ml")]),
+    ("Pizza Napoletana", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the anchovies and capers evenly.\n"
+     "4. Sprinkle oregano and drizzle with olive oil.\n"
+     "5. Bake until the cheese bubbles and the crust is golden.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Fresh Mozzarella", 200, "g"),
+      ("Anchovy Fillets", 6, "pcs"), ("Capers", 10, "g"), ("Oregano", 1, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Lumpiang Sariwa", "Appetizer", 8,
-     "1. Sauté garlic and onion in cooking oil until soft.\n"
-     "2. Add ground pork and cook until browned.\n"
-     "3. Add shrimp, tofu, carrots, and bean sprouts; stir-fry 3 minutes.\n"
-     "4. Season with fish sauce; cook until vegetables are tender. Cool.\n"
-     "5. Wrap filling in lumpia wrapper and serve with sweet peanut sauce.",
-     [("Lumpia Wrapper", 1, "pcs"), ("Ground Pork", 40, "g"), ("Shrimp", 25, "g"),
-      ("Tofu", 1, "pcs"), ("Carrot", 1, "pcs"), ("Bean Sprout", 30, "g"),
-      ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
-      ("Fish Sauce", 5, "ml"), ("Cooking Oil", 5, "ml")]),
+    ("Pizza Quattro Formaggi", "Main Course", 1,
+     "1. Roll out the dough.\n"
+     "2. Sprinkle the mozzarella over the base.\n"
+     "3. Add pieces of gorgonzola.\n"
+     "4. Scatter the fontina and parmesan.\n"
+     "5. Drizzle lightly with olive oil.\n"
+     "6. Bake until all the cheeses are melted and golden. Serve immediately.",
+     [("Pizza Dough", 1, "pcs"), ("Shredded Mozzarella", 100, "g"), ("Gorgonzola Cheese", 50, "g"),
+      ("Parmesan Cheese", 50, "g"), ("Fontina Cheese", 50, "g"), ("Olive Oil", 1, "tbsp")]),
 
-    # ── MAIN COURSE (10) ─────────────────────────────────────────────────────
+    ("Pizza Quattro Stagioni", "Main Course", 1,
+     "1. Spread tomato sauce over the dough.\n"
+     "2. Add the mozzarella.\n"
+     "3. Divide the pizza into four sections.\n"
+     "4. Place mushrooms, ham, artichokes and olives in separate sections.\n"
+     "5. Bake for 10-12 minutes. Slice and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Mushrooms", 60, "g"), ("Cooked Ham", 60, "g"), ("Artichoke Hearts", 60, "g"),
+      ("Black Olives", 30, "g")]),
 
-    ("Adobong Manok", "Main Course", 6,
-     "1. Marinate chicken thigh in soy sauce, vinegar, garlic, and pepper for 30 min.\n"
-     "2. Sear in cooking oil on both sides until lightly browned.\n"
-     "3. Add marinade and bay leaves; bring to a boil.\n"
-     "4. Lower heat and simmer 25 minutes until chicken is tender.\n"
-     "5. Increase heat to reduce and glaze the sauce. Serve with steamed rice.",
-     [("Chicken Thigh", 300, "g"), ("Soy Sauce", 40, "ml"), ("Vinegar", 20, "ml"),
-      ("Garlic", 1, "pcs"), ("Bay Leaf", 1, "pcs"),
-      ("Black Pepper", 2, "g"), ("Cooking Oil", 15, "ml")]),
+    ("Pizza Capricciosa", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce evenly.\n"
+     "2. Cover with mozzarella.\n"
+     "3. Add the ham, mushrooms, artichokes and olives.\n"
+     "4. Bake until golden.\n"
+     "5. Let cool slightly before slicing.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Cooked Ham", 70, "g"), ("Mushrooms", 70, "g"), ("Artichoke Hearts", 60, "g"),
+      ("Black Olives", 30, "g")]),
 
-    ("Kare-Kare", "Main Course", 5,
-     "1. Simmer beef brisket in water until very tender, about 90 minutes.\n"
-     "2. Sauté annatto powder in cooking oil; add to the broth for color.\n"
-     "3. Stir in peanut butter or cornstarch paste to thicken the sauce.\n"
-     "4. Add eggplant, okra, sitaw, and pechay; cook until just tender.\n"
-     "5. Serve with bagoong alamang on the side.",
-     [("Beef Brisket", 250, "g"), ("Eggplant", 1, "pcs"), ("Okra", 3, "pcs"),
-      ("Sitaw", 3, "pcs"), ("Pechay", 1, "pcs"),
-      ("Annatto Powder", 5, "g"), ("Bagoong Alamang", 30, "g"), ("Cooking Oil", 20, "ml")]),
+    ("Pizza Diavola", "Main Course", 1,
+     "1. Spread tomato sauce over the dough.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the spicy salami slices.\n"
+     "4. Sprinkle the chilli flakes and drizzle with olive oil.\n"
+     "5. Bake until crispy and bubbling. Serve hot.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Spicy Calabrese Salami", 80, "g"), ("Chili Flakes", 2, "g"), ("Olive Oil", 1, "tbsp")]),
 
-    ("Lechon Kawali", "Main Course", 4,
-     "1. Boil pork belly with garlic and salt until fork-tender, about 45 minutes.\n"
-     "2. Pat completely dry; rub with salt. Refrigerate uncovered for 4 hours.\n"
-     "3. Deep-fry in hot cooking oil, turning occasionally, until skin crackles.\n"
-     "4. Drain on paper towels, then chop into serving pieces.\n"
-     "5. Serve with lechon sauce or soy-vinegar dip.",
-     [("Pork Belly", 250, "g"), ("Garlic", 1, "pcs"),
-      ("Salt", 5, "g"), ("Black Pepper", 2, "g"), ("Cooking Oil", 50, "ml")]),
+    ("Pizza Prosciutto e Funghi", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce.\n"
+     "2. Add the mozzarella.\n"
+     "3. Top with the mushrooms and prosciutto.\n"
+     "4. Bake for 10-12 minutes. Slice and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Prosciutto", 70, "g"), ("Mushrooms", 80, "g")]),
 
-    ("Sinigang na Baboy", "Main Course", 6,
-     "1. Boil pork belly in water until tender, about 40 minutes.\n"
-     "2. Add onion and tomato; simmer 10 minutes.\n"
-     "3. Stir in tamarind base or sinigang mix; season with fish sauce.\n"
-     "4. Add okra and cook 5 minutes.\n"
-     "5. Add kangkong last; cook 2 minutes. Serve hot with rice.",
-     [("Pork Belly", 200, "g"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Fish Sauce", 15, "ml"), ("Kangkong", 1, "pcs"), ("Okra", 3, "pcs")]),
+    ("Pizza Romana", "Main Course", 1,
+     "1. Spread tomato sauce on the dough.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the anchovies and capers.\n"
+     "4. Sprinkle oregano and drizzle with olive oil.\n"
+     "5. Bake until golden. Serve immediately.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 180, "g"),
+      ("Anchovy Fillets", 6, "pcs"), ("Capers", 15, "g"), ("Oregano", 1, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Bulalo", "Main Course", 4,
-     "1. Blanch beef shank in boiling water for 5 minutes; rinse and clean.\n"
-     "2. Simmer in fresh water with onion and garlic for 2-3 hours until very tender.\n"
-     "3. Skim the broth periodically for clarity.\n"
-     "4. Season with fish sauce and whole black pepper.\n"
-     "5. Add pechay in the last 5 minutes. Serve hot.",
-     [("Beef Shank", 250, "g"), ("Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
-      ("Fish Sauce", 15, "ml"), ("Pechay", 1, "pcs"), ("Black Pepper", 2, "g")]),
+    ("Pizza Siciliana", "Main Course", 1,
+     "1. Press the thick dough into a baking tray.\n"
+     "2. Spread tomato sauce evenly.\n"
+     "3. Add the mozzarella, onions and anchovies.\n"
+     "4. Sprinkle the breadcrumbs and oregano, then drizzle with olive oil.\n"
+     "5. Bake for 15-20 minutes until the crust is crisp. Cut into squares and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 150, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Yellow Onion", 1, "pcs"), ("Anchovy Fillets", 5, "pcs"), ("Breadcrumbs", 20, "g"),
+      ("Oregano", 1, "g"), ("Olive Oil", 2, "tbsp")]),
 
-    ("Tinolang Manok", "Main Course", 5,
-     "1. Sauté garlic, onion, and ginger in cooking oil until fragrant.\n"
-     "2. Add chicken wings and cook until lightly browned on all sides.\n"
-     "3. Pour in water or broth; bring to a boil then simmer 20 minutes.\n"
-     "4. Add green papaya and cook 8 minutes until tender.\n"
-     "5. Season with fish sauce; add pechay and cook 2 minutes. Serve hot.",
-     [("Chicken Wings", 250, "g"), ("Ginger", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Garlic", 1, "pcs"), ("Green Papaya", 1, "pcs"), ("Pechay", 1, "pcs"),
-      ("Fish Sauce", 15, "ml"), ("Cooking Oil", 10, "ml")]),
+    ("Pizza Ortolana", "Main Course", 1,
+     "1. Preheat the oven to 250°C (480°F).\n"
+     "2. Roll out the pizza dough and place it on a pizza tray.\n"
+     "3. Spread the tomato sauce evenly and sprinkle over the mozzarella.\n"
+     "4. Arrange the zucchini, eggplant, bell pepper and red onion on top.\n"
+     "5. Sprinkle with Italian seasoning and drizzle with olive oil.\n"
+     "6. Bake for 10-12 minutes until the crust is golden. Slice and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Zucchini", 1, "pcs"), ("Eggplant", 1, "pcs"), ("Bell Pepper", 1, "pcs"),
+      ("Red Onion", 1, "pcs"), ("Italian Seasoning", 2, "g"), ("Olive Oil", 2, "tbsp")]),
 
-    ("Caldereta", "Main Course", 6,
-     "1. Brown beef brisket in cooking oil; set aside.\n"
-     "2. Sauté garlic and onion; stir in tomato paste and liver spread.\n"
-     "3. Return beef; add enough water to cover. Simmer 60 minutes.\n"
-     "4. Add potato and bell pepper; cook 10 minutes until tender.\n"
-     "5. Add bay leaves, season with salt and pepper. Serve hot with rice.",
-     [("Beef Brisket", 200, "g"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Garlic", 1, "pcs"), ("Bell Pepper", 1, "pcs"), ("Potato", 1, "pcs"),
-      ("Tomato Paste", 15, "g"), ("Liver Spread", 10, "g"),
-      ("Bay Leaf", 1, "pcs"), ("Salt", 2, "g"), ("Black Pepper", 1, "g"),
-      ("Cooking Oil", 10, "ml")]),
+    ("Pizza Tonno e Cipolla", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce evenly.\n"
+     "2. Add the mozzarella.\n"
+     "3. Scatter the drained tuna over the cheese.\n"
+     "4. Top with the sliced red onion.\n"
+     "5. Sprinkle oregano, drizzle with olive oil and bake for 10-12 minutes. Serve hot.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Canned Tuna", 160, "g"), ("Red Onion", 1, "pcs"), ("Oregano", 1, "g"),
+      ("Olive Oil", 2, "tbsp")]),
 
-    ("Ginataang Hipon Sitaw at Kalabasa", "Main Course", 4,
-     "1. Sauté garlic and onion in cooking oil until fragrant.\n"
-     "2. Add kalabasa pieces; cook 5 minutes until slightly softened.\n"
-     "3. Pour in coconut milk and bring to a gentle simmer.\n"
-     "4. Add sitaw and cook 3 minutes.\n"
-     "5. Add shrimp, season with fish sauce, and cook 3 minutes until pink.",
-     [("Shrimp", 150, "g"), ("Sitaw", 5, "pcs"), ("Kalabasa", 1, "pcs"),
-      ("Coconut Milk", 60, "ml"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Fish Sauce", 5, "ml"), ("Cooking Oil", 10, "ml")]),
+    ("Pizza Boscaiola", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce over the base.\n"
+     "2. Sprinkle the mozzarella evenly.\n"
+     "3. Add the mushrooms and the cooked, crumbled sausage.\n"
+     "4. Drizzle with olive oil and bake for 10-12 minutes.\n"
+     "5. Garnish with chopped parsley before serving.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Mushrooms", 150, "g"), ("Italian Sausage", 150, "g"), ("Olive Oil", 2, "tbsp"),
+      ("Fresh Parsley", 3, "g")]),
 
-    ("Chicken Inasal", "Main Course", 4,
-     "1. Combine vinegar, garlic, ginger, annatto powder, fish sauce, and salt for marinade.\n"
-     "2. Score the chicken thigh pieces and coat thoroughly; marinate at least 2 hours.\n"
-     "3. Grill over medium-high heat, basting with annatto-oil mixture.\n"
-     "4. Cook until skin is charred in spots and juices run clear.\n"
-     "5. Serve with garlic rice and spiced vinegar.",
-     [("Chicken Thigh", 250, "g"), ("Garlic", 1, "pcs"), ("Ginger", 1, "pcs"),
-      ("Vinegar", 20, "ml"), ("Annatto Powder", 3, "g"),
-      ("Fish Sauce", 10, "ml"), ("Salt", 2, "g"), ("Cooking Oil", 15, "ml")]),
+    ("Pizza Frutti di Mare", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce evenly.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the shrimp, squid rings and mussels over the pizza.\n"
+     "4. Drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes until the seafood is cooked. Sprinkle with parsley and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Shrimp", 100, "g"), ("Squid Rings", 100, "g"), ("Mussels", 100, "g"),
+      ("Olive Oil", 2, "tbsp"), ("Fresh Parsley", 3, "g")]),
 
-    ("Kinilaw na Bangus", "Main Course", 4,
-     "1. Fillet bangus and cut into bite-sized cubes; rinse in cold water.\n"
-     "2. Marinate in vinegar for 5-8 minutes to cure the fish; drain excess liquid.\n"
-     "3. Add ginger, onion, and calamansi juice; toss gently.\n"
-     "4. Season with fish sauce and let sit 10 minutes to meld flavors.\n"
-     "5. Adjust seasoning; serve chilled as a main course with rice.",
-     [("Bangus", 200, "g"), ("Vinegar", 30, "ml"), ("Ginger", 1, "pcs"),
-      ("Onion", 1, "pcs"), ("Calamansi", 3, "pcs"), ("Fish Sauce", 10, "ml")]),
+    ("Pizza Salsiccia", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce evenly.\n"
+     "2. Cover with the mozzarella.\n"
+     "3. Add the cooked, crumbled sausage.\n"
+     "4. Sprinkle the fennel seeds and drizzle lightly with olive oil.\n"
+     "5. Bake for 10-12 minutes. Slice and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Italian Sausage", 200, "g"), ("Fennel Seeds", 2, "g"), ("Olive Oil", 1, "tbsp")]),
 
-    # ── SIDE DISH (5) ────────────────────────────────────────────────────────
+    ("Pizza Bufalina", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce over the base.\n"
+     "2. Add slices of buffalo mozzarella.\n"
+     "3. Bake for 10-12 minutes and remove from the oven.\n"
+     "4. Top with fresh basil.\n"
+     "5. Drizzle with olive oil and season lightly before serving.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Buffalo Mozzarella", 200, "g"),
+      ("Fresh Basil", 5, "g"), ("Olive Oil", 2, "tbsp"), ("Salt", 1, "g"),
+      ("Black Pepper", 0.5, "g")]),
 
-    ("Ginisang Kangkong", "Side Dish", 3,
-     "1. Heat cooking oil in a pan over medium heat.\n"
-     "2. Sauté garlic until golden; add onion and cook until translucent.\n"
-     "3. Add kangkong stalks first and cook 2 minutes.\n"
-     "4. Add leaves, season with fish sauce, and toss quickly.\n"
-     "5. Cook 1 more minute - do not overcook. Serve immediately.",
-     [("Kangkong", 1, "pcs"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Fish Sauce", 10, "ml"), ("Cooking Oil", 10, "ml")]),
+    ("Pizza Parma", "Main Course", 1,
+     "1. Spread tomato sauce over the dough and add the mozzarella.\n"
+     "2. Bake until the cheese is melted and the crust is golden.\n"
+     "3. Remove from the oven.\n"
+     "4. Top with Parma ham, arugula and parmesan shavings.\n"
+     "5. Drizzle with olive oil, slice and serve immediately.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Parma Ham", 100, "g"), ("Arugula", 20, "g"), ("Parmesan Cheese", 20, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Ginisang Sitaw", "Side Dish", 4,
-     "1. Heat oil; sauté garlic and onion until softened.\n"
-     "2. Add tomato and cook 3 minutes until it breaks down.\n"
-     "3. Add sitaw and stir-fry 5 minutes over high heat.\n"
-     "4. Season with fish sauce; add a splash of water if needed.\n"
-     "5. Cover and cook until beans are tender. Serve with rice.",
-     [("Sitaw", 5, "pcs"), ("Garlic", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Tomato", 1, "pcs"), ("Fish Sauce", 10, "ml"), ("Cooking Oil", 10, "ml")]),
+    ("Pizza Calabrese", "Main Course", 1,
+     "1. Roll out the dough and spread tomato sauce evenly.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the spicy Calabrese salami and olives on top.\n"
+     "4. Sprinkle the chilli flakes and drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes. Serve while hot.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Spicy Calabrese Salami", 90, "g"), ("Black Olives", 40, "g"), ("Chili Flakes", 2, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Ensaladang Talong", "Side Dish", 3,
-     "1. Grill eggplants directly over flame until charred and very soft.\n"
-     "2. Peel off the charred skin carefully; place flesh in a bowl.\n"
-     "3. Flake the eggplant flesh and let cool completely.\n"
-     "4. Mix with diced tomato and thinly sliced onion.\n"
-     "5. Dress with fish sauce and calamansi juice. Serve at room temperature.",
-     [("Eggplant", 1, "pcs"), ("Onion", 1, "pcs"), ("Tomato", 1, "pcs"),
-      ("Fish Sauce", 10, "ml"), ("Calamansi", 2, "pcs")]),
+    ("Pizza Vegetariana", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce evenly.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the mushrooms, bell pepper, olives, cherry tomatoes and spinach over the cheese.\n"
+     "4. Drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes. Slice and serve warm.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Mushrooms", 80, "g"), ("Bell Pepper", 1, "pcs"), ("Black Olives", 30, "g"),
+      ("Cherry Tomatoes", 60, "g"), ("Spinach", 40, "g"), ("Olive Oil", 2, "tbsp")]),
 
-    ("Ensaladang Mangga", "Side Dish", 3,
-     "1. Peel and julienne green mango into thin strips.\n"
-     "2. Dice tomato and thinly slice onion; combine with the mango.\n"
-     "3. Mix in bagoong alamang and calamansi juice.\n"
-     "4. Toss gently; refrigerate 10 minutes to meld flavors.\n"
-     "5. Serve alongside grilled or fried fish.",
-     [("Green Mango", 1, "pcs"), ("Tomato", 1, "pcs"), ("Onion", 1, "pcs"),
-      ("Bagoong Alamang", 30, "g"), ("Calamansi", 2, "pcs")]),
+    ("Pizza Bianca", "Main Course", 1,
+     "1. Preheat the oven to 250°C (480°F) and roll out the pizza dough.\n"
+     "2. Brush the dough with olive oil instead of tomato sauce.\n"
+     "3. Sprinkle the minced garlic evenly over the base.\n"
+     "4. Add the mozzarella and spoonfuls of ricotta.\n"
+     "5. Sprinkle with rosemary, salt, pepper and parmesan.\n"
+     "6. Bake for 10-12 minutes until the crust is crisp and the cheese is golden.",
+     [("Pizza Dough", 1, "pcs"), ("Shredded Mozzarella", 200, "g"), ("Ricotta Cheese", 100, "g"),
+      ("Garlic", 2, "pcs"), ("Olive Oil", 2, "tbsp"), ("Fresh Rosemary", 3, "g"),
+      ("Parmesan Cheese", 15, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
 
-    ("Ginisang Monggo", "Side Dish", 6,
-     "1. Sauté garlic and onion in cooking oil; add tomato and cook until soft.\n"
-     "2. Add ground pork and cook until no longer pink.\n"
-     "3. Add pre-soaked mung beans and water to cover by 2 inches.\n"
-     "4. Simmer 30-40 minutes, stirring occasionally, until beans are soft and creamy.\n"
-     "5. Season with fish sauce; adjust consistency with water. Serve hot.",
-     [("Mung Bean", 30, "g"), ("Ground Pork", 30, "g"), ("Garlic", 1, "pcs"),
-      ("Onion", 1, "pcs"), ("Tomato", 1, "pcs"),
-      ("Fish Sauce", 5, "ml"), ("Cooking Oil", 5, "ml")]),
+    ("Pizza Tartufata", "Main Course", 1,
+     "1. Preheat the oven to 250°C (480°F) and roll out the pizza dough.\n"
+     "2. Spread the mozzarella evenly over the dough.\n"
+     "3. Top with the sliced mushrooms.\n"
+     "4. Bake for 10-12 minutes until the crust is golden.\n"
+     "5. Drizzle with truffle oil and sprinkle parmesan and parsley before serving.",
+     [("Pizza Dough", 1, "pcs"), ("Shredded Mozzarella", 200, "g"), ("Mushrooms", 100, "g"),
+      ("Truffle Oil", 1, "tbsp"), ("Parmesan Cheese", 50, "g"), ("Fresh Parsley", 3, "g")]),
 
-    # ── DESSERT (6) ──────────────────────────────────────────────────────────
+    ("Pizza Mimosa", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce evenly.\n"
+     "2. Add the mozzarella.\n"
+     "3. Sprinkle the diced ham and sweet corn over the top.\n"
+     "4. Drizzle lightly with olive oil.\n"
+     "5. Bake for 10-12 minutes. Slice and serve hot.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Cooked Ham", 100, "g"), ("Sweet Corn", 100, "g"), ("Olive Oil", 1, "tbsp")]),
 
-    # Caramel Sauce measures sugar by the TABLESPOON and salt by the TEASPOON so
-    # the spoon->grams conversion is demonstrable end to end (panel comment #1):
-    #   1 tbsp sugar = 12.5 g  (density 0.845)
-    #   1 tsp  salt  ≈ 5.9 g   (density 1.2)
-    # Prepare 1 serving and watch Sugar drop 12.5 g and Salt ~5.9 g.
-    ("Caramel Sauce", "Dessert", 4,
-     "1. Measure the sugar by the tablespoon into a heavy saucepan.\n"
-     "2. Heat over low, stirring, until the sugar melts and turns amber.\n"
-     "3. Add a teaspoon of salt to balance the sweetness; swirl to combine.\n"
-     "4. Remove from heat and cool slightly. Drizzle over leche flan or desserts.",
-     [("Sugar", 1, "tbsp"), ("Salt", 1, "tsp")]),
+    ("Pizza Napoli", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce over the base.\n"
+     "2. Add the mozzarella.\n"
+     "3. Arrange the anchovies and capers evenly.\n"
+     "4. Sprinkle oregano and drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes until golden. Serve immediately.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Anchovy Fillets", 6, "pcs"), ("Capers", 20, "g"), ("Oregano", 1, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    # Leche Flan measures its caramel sugar by the TABLESPOON and a pinch of salt
-    # by the TEASPOON, so the spoon->grams conversion is demonstrable on a familiar
-    # dessert (panel comment #1):
-    #   1 tbsp sugar = 12.5 g  (density 0.845)  → 2 tbsp   = 25 g
-    #   1 tsp  salt  ≈ 5.9 g   (density 1.2)    → 0.25 tsp ≈ 1.5 g
-    # Prepare 1 serving and watch Sugar drop ~25 g and Salt ~1.5 g.
-    ("Leche Flan", "Dessert", 6,
-     "1. Caramelize the sugar (measured by the tablespoon) in a llanera mold over low heat until amber; swirl to coat.\n"
-     "2. Beat egg yolks with evaporated milk, condensed milk, and a pinch of salt.\n"
-     "3. Strain the custard into the caramelized mold.\n"
-     "4. Cover with foil and steam over low heat 30-35 minutes until set.\n"
-     "5. Cool completely, then invert onto a plate. Serve chilled.",
-     [("Egg", 4, "pcs"), ("Evaporated Milk", 100, "ml"), ("Condensed Milk", 50, "ml"),
-      ("Sugar", 2, "tbsp"), ("Salt", 0.25, "tsp")]),
+    ("Pizza Pugliese", "Main Course", 1,
+     "1. Roll out the pizza dough and spread tomato sauce evenly.\n"
+     "2. Sprinkle the mozzarella over the sauce.\n"
+     "3. Add the sliced red onion and the olives.\n"
+     "4. Sprinkle oregano and drizzle with olive oil.\n"
+     "5. Bake for 10-12 minutes. Slice and serve.",
+     [("Pizza Dough", 1, "pcs"), ("Tomato Sauce", 120, "ml"), ("Shredded Mozzarella", 200, "g"),
+      ("Red Onion", 1, "pcs"), ("Black Olives", 40, "g"), ("Oregano", 1, "g"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Bibingka", "Dessert", 4,
-     "1. Mix rice flour, sugar, and a pinch of salt.\n"
-     "2. Add beaten eggs, coconut milk, and evaporated milk; stir until smooth.\n"
-     "3. Line clay or muffin molds with banana leaf; pour batter in.\n"
-     "4. Bake at 200°C for 20-25 minutes until golden on top and set in center.\n"
-     "5. Brush with butter and top with salted egg. Serve warm.",
-     [("Rice Flour", 100, "g"), ("Egg", 2, "pcs"), ("Coconut Milk", 120, "ml"),
-      ("Evaporated Milk", 30, "ml"), ("Sugar", 50, "g"), ("Salt", 2, "g")]),
+    ("Pizza Calzone", "Main Course", 1,
+     "1. Preheat the oven to 220°C (425°F) and roll the dough into a large circle.\n"
+     "2. Spread tomato sauce on one half of the dough.\n"
+     "3. Add the mozzarella, ricotta and ham.\n"
+     "4. Fold the dough over into a half-moon and seal the edges with a fork.\n"
+     "5. Brush with beaten egg and bake for 18-20 minutes until golden brown.\n"
+     "6. Let cool slightly before serving.",
+     [("Pizza Dough", 1, "pcs"), ("Shredded Mozzarella", 150, "g"), ("Ricotta Cheese", 100, "g"),
+      ("Cooked Ham", 100, "g"), ("Tomato Sauce", 30, "ml"), ("Egg", 1, "pcs"),
+      ("Olive Oil", 1, "tbsp")]),
 
-    ("Maja Blanca", "Dessert", 8,
-     "1. Whisk coconut milk, cornstarch, and sugar together in a heavy saucepan.\n"
-     "2. Cook over medium heat, stirring constantly, until the mixture thickens.\n"
-     "3. Add evaporated milk halfway; continue stirring until it pulls away from the sides.\n"
-     "4. Pour into a lightly oiled dish and smooth the top.\n"
-     "5. Cool to room temperature, refrigerate until firm. Top with latik and serve.",
-     [("Coconut Milk", 200, "ml"), ("Cornstarch", 40, "g"),
-      ("Sugar", 60, "g"), ("Evaporated Milk", 50, "ml")]),
+    # ══ PASTA (25) ═══════════════════════════════════════════════════════════
 
-    ("Turon", "Dessert", 8,
-     "1. Peel bananas and roll each one in sugar to coat.\n"
-     "2. Place a sugared banana in the center of a lumpia wrapper.\n"
-     "3. Fold the sides in and roll up tightly, sealing the edge with a little water.\n"
-     "4. Heat cooking oil over medium heat; fry turon until golden and caramelized.\n"
-     "5. Drain on paper towels. Serve warm.",
-     [("Banana", 1, "pcs"), ("Lumpia Wrapper", 1, "pcs"),
-      ("Sugar", 10, "g"), ("Cooking Oil", 15, "ml")]),
+    ("Spaghetti Carbonara", "Main Course", 4,
+     "1. Cook the spaghetti until al dente.\n"
+     "2. Fry the guanciale until crispy.\n"
+     "3. Whisk together the eggs, Pecorino and black pepper.\n"
+     "4. Drain the pasta, reserving a little pasta water, and toss it with the guanciale.\n"
+     "5. Remove from the heat and stir in the egg mixture.\n"
+     "6. Loosen with pasta water until creamy. Serve with extra Pecorino and pepper.",
+     [("Spaghetti", 100, "g"), ("Guanciale", 40, "g"), ("Egg", 1, "pcs"),
+      ("Pecorino Romano", 25, "g"), ("Black Pepper", 1, "g")]),
 
-    ("Buko Pandan", "Dessert", 8,
-     "1. Boil pandan leaves in water 10 minutes; strain and reserve pandan water.\n"
-     "2. Dissolve gulaman in pandan water; boil, cool, then cut into small cubes.\n"
-     "3. Cook sago pearls until translucent; drain and rinse.\n"
-     "4. Scoop young coconut flesh into strips; reserve coconut water.\n"
-     "5. Mix coconut flesh, gulaman, sago, condensed milk, all-purpose cream, "
-     "and coconut water. Chill and serve cold.",
-     [("Young Coconut", 1, "pcs"), ("Pandan Leaf", 1, "pcs"),
-      ("Gulaman", 5, "g"), ("Sago Pearl", 5, "g"),
-      ("Condensed Milk", 25, "ml"), ("All-Purpose Cream", 15, "ml"),
-      ("Sugar", 10, "g")]),
+    ("Spaghetti Aglio e Olio", "Main Course", 4,
+     "1. Cook the spaghetti until al dente.\n"
+     "2. Heat the olive oil in a large pan.\n"
+     "3. Gently cook the sliced garlic until lightly golden.\n"
+     "4. Add the chilli flakes.\n"
+     "5. Toss the spaghetti in the pan until coated with the oil.\n"
+     "6. Stir in the parsley and serve immediately.",
+     [("Spaghetti", 100, "g"), ("Garlic", 2, "pcs"), ("Olive Oil", 1, "tbsp"),
+      ("Chili Flakes", 1, "g"), ("Fresh Parsley", 3, "g"), ("Salt", 2, "g")]),
+
+    ("Spaghetti alle Vongole", "Main Course", 4,
+     "1. Cook the spaghetti until al dente.\n"
+     "2. Heat the olive oil and saute the garlic.\n"
+     "3. Add the clams and pour in the white wine.\n"
+     "4. Cover and cook until the clams open; discard any that stay shut.\n"
+     "5. Toss the spaghetti into the pan and mix with the clam juices.\n"
+     "6. Garnish with parsley and serve.",
+     [("Spaghetti", 100, "g"), ("Clams", 250, "g"), ("Garlic", 1, "pcs"),
+      ("Olive Oil", 1, "tbsp"), ("Dry White Wine", 30, "ml"), ("Fresh Parsley", 3, "g"),
+      ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Spaghetti al Pomodoro", "Main Course", 4,
+     "1. Cook the spaghetti until al dente.\n"
+     "2. Heat the olive oil and saute the garlic.\n"
+     "3. Add the crushed tomatoes and simmer for 15-20 minutes.\n"
+     "4. Season with salt and pepper.\n"
+     "5. Toss the spaghetti with the sauce and add the fresh basil.\n"
+     "6. Serve with grated parmesan.",
+     [("Spaghetti", 100, "g"), ("Crushed Tomatoes", 125, "g"), ("Garlic", 1, "pcs"),
+      ("Olive Oil", 1, "tbsp"), ("Fresh Basil", 3, "g"), ("Parmesan Cheese", 10, "g"),
+      ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Penne all'Arrabbiata", "Main Course", 4,
+     "1. Cook the penne until al dente.\n"
+     "2. Heat the olive oil and saute the garlic.\n"
+     "3. Stir in the chilli flakes and cook for 30 seconds.\n"
+     "4. Add the crushed tomatoes and simmer for 15 minutes; season with salt.\n"
+     "5. Toss the penne in the spicy tomato sauce.\n"
+     "6. Garnish with parsley and serve with parmesan.",
+     [("Penne", 100, "g"), ("Crushed Tomatoes", 125, "g"), ("Garlic", 1, "pcs"),
+      ("Olive Oil", 1, "tbsp"), ("Chili Flakes", 1, "g"), ("Fresh Parsley", 3, "g"),
+      ("Parmesan Cheese", 10, "g"), ("Salt", 1, "g")]),
+
+    ("Penne alla Vodka", "Main Course", 4,
+     "1. Cook the penne until al dente.\n"
+     "2. Heat the olive oil and saute the onion until softened, then add the garlic.\n"
+     "3. Pour in the vodka and simmer for 2-3 minutes.\n"
+     "4. Add the crushed tomatoes and cook for 10 minutes.\n"
+     "5. Stir in the heavy cream and parmesan; season with salt and pepper.\n"
+     "6. Toss the penne in the sauce, garnish with basil and serve.",
+     [("Penne", 100, "g"), ("Yellow Onion", 1, "pcs"), ("Garlic", 1, "pcs"),
+      ("Vodka", 30, "ml"), ("Crushed Tomatoes", 125, "g"), ("Heavy Cream", 30, "ml"),
+      ("Parmesan Cheese", 12, "g"), ("Olive Oil", 1, "tbsp"), ("Fresh Basil", 2, "g"),
+      ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Fettuccine Alfredo", "Main Course", 4,
+     "1. Cook the fettuccine until al dente.\n"
+     "2. Melt the butter in a large pan over low heat.\n"
+     "3. Stir in the heavy cream and simmer gently.\n"
+     "4. Add the parmesan and stir until smooth; season with salt and pepper.\n"
+     "5. Toss the fettuccine in the sauce until coated.\n"
+     "6. Garnish with parsley and serve immediately.",
+     [("Fettuccine", 100, "g"), ("Butter", 2, "tbsp"), ("Heavy Cream", 50, "ml"),
+      ("Parmesan Cheese", 25, "g"), ("Fresh Parsley", 2, "g"), ("Salt", 1, "g"),
+      ("Black Pepper", 0.5, "g")]),
+
+    ("Fettuccine ai Funghi", "Main Course", 4,
+     "1. Cook the fettuccine until al dente.\n"
+     "2. Heat the olive oil and saute the mushrooms until browned.\n"
+     "3. Add the garlic and cook for 1 minute.\n"
+     "4. Stir in the heavy cream and simmer for 5 minutes.\n"
+     "5. Add the parmesan and season with salt and pepper.\n"
+     "6. Toss the fettuccine in the sauce, garnish with parsley and serve.",
+     [("Fettuccine", 100, "g"), ("Mushrooms", 60, "g"), ("Garlic", 1, "pcs"),
+      ("Heavy Cream", 50, "ml"), ("Parmesan Cheese", 12, "g"), ("Olive Oil", 10, "ml"),
+      ("Fresh Parsley", 2, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Tagliatelle al Ragu", "Main Course", 4,
+     "1. Cook the tagliatelle until al dente.\n"
+     "2. Heat the olive oil and saute the onion, carrot, celery and garlic.\n"
+     "3. Add the ground beef and cook until browned.\n"
+     "4. Stir in the tomato paste and crushed tomatoes.\n"
+     "5. Simmer for 30-40 minutes and season with salt and pepper.\n"
+     "6. Toss the tagliatelle with the ragu, top with parmesan and serve.",
+     [("Tagliatelle", 100, "g"), ("Ground Beef", 125, "g"), ("Yellow Onion", 1, "pcs"),
+      ("Carrot", 1, "pcs"), ("Celery", 1, "pcs"), ("Garlic", 1, "pcs"),
+      ("Crushed Tomatoes", 125, "g"), ("Tomato Paste", 8, "g"), ("Olive Oil", 10, "ml"),
+      ("Parmesan Cheese", 12, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Lasagne alla Bolognese", "Main Course", 6,
+     "1. Preheat the oven to 180°C (350°F).\n"
+     "2. Cook the ground beef with the onion and garlic.\n"
+     "3. Add the crushed tomatoes and simmer for 20 minutes.\n"
+     "4. Spread a layer of meat sauce in a baking dish.\n"
+     "5. Layer lasagne sheets, bechamel, mozzarella and parmesan; repeat.\n"
+     "6. Finish with cheese on top and bake for 40-45 minutes.\n"
+     "7. Let rest for 10 minutes before serving.",
+     [("Lasagne Sheets", 2, "pcs"), ("Ground Beef", 85, "g"), ("Crushed Tomatoes", 85, "g"),
+      ("Yellow Onion", 1, "pcs"), ("Garlic", 1, "pcs"), ("Bechamel Sauce", 85, "ml"),
+      ("Shredded Mozzarella", 35, "g"), ("Parmesan Cheese", 17, "g"), ("Olive Oil", 5, "ml"),
+      ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Linguine al Pesto", "Main Course", 4,
+     "1. Cook the linguine until al dente.\n"
+     "2. Reserve a little pasta water before draining.\n"
+     "3. Toss the linguine with the basil pesto.\n"
+     "4. Add a splash of pasta water if needed.\n"
+     "5. Stir in the parmesan and drizzle with olive oil.\n"
+     "6. Garnish with pine nuts and serve.",
+     [("Linguine", 100, "g"), ("Basil Pesto", 38, "g"), ("Parmesan Cheese", 12, "g"),
+      ("Olive Oil", 8, "ml"), ("Pine Nuts", 5, "g")]),
+
+    ("Linguine ai Frutti di Mare", "Main Course", 4,
+     "1. Cook the linguine until al dente.\n"
+     "2. Heat the olive oil and saute the garlic.\n"
+     "3. Add the shrimp, mussels and squid rings and cook for 3-5 minutes.\n"
+     "4. Pour in the white wine and simmer.\n"
+     "5. Season with salt and pepper and toss in the linguine.\n"
+     "6. Garnish with parsley and serve.",
+     [("Linguine", 100, "g"), ("Shrimp", 38, "g"), ("Mussels", 38, "g"),
+      ("Squid Rings", 38, "g"), ("Garlic", 1, "pcs"), ("Dry White Wine", 30, "ml"),
+      ("Olive Oil", 8, "ml"), ("Fresh Parsley", 3, "g"), ("Salt", 1, "g"),
+      ("Black Pepper", 0.5, "g")]),
+
+    ("Bucatini all'Amatriciana", "Main Course", 4,
+     "1. Cook the bucatini until al dente.\n"
+     "2. Fry the guanciale until crispy.\n"
+     "3. Add the onion and cook until soft.\n"
+     "4. Stir in the crushed tomatoes and simmer for 15 minutes.\n"
+     "5. Toss the bucatini in the sauce.\n"
+     "6. Sprinkle with Pecorino Romano and black pepper. Serve immediately.",
+     [("Bucatini", 100, "g"), ("Guanciale", 38, "g"), ("Crushed Tomatoes", 125, "g"),
+      ("Yellow Onion", 1, "pcs"), ("Pecorino Romano", 12, "g"), ("Black Pepper", 1, "g")]),
+
+    ("Bucatini alla Gricia", "Main Course", 4,
+     "1. Cook the bucatini until al dente and reserve some pasta water.\n"
+     "2. Fry the guanciale until crispy.\n"
+     "3. Toss the pasta with the guanciale.\n"
+     "4. Add the Pecorino Romano.\n"
+     "5. Stir in a little pasta water to create a creamy sauce.\n"
+     "6. Season generously with black pepper and serve immediately.",
+     [("Bucatini", 100, "g"), ("Guanciale", 38, "g"), ("Pecorino Romano", 19, "g"),
+      ("Black Pepper", 1, "g")]),
+
+    # Cacio e Pepe measures the pepper by the TEASPOON so the spoon->grams
+    # conversion is demonstrable end to end: 1 tsp black pepper = 2.5 g
+    # (density 0.5). Prepare 4 servings and watch Black Pepper drop ~5 g.
+    ("Cacio e Pepe", "Main Course", 4,
+     "1. Cook the tonnarelli until al dente and reserve the pasta water.\n"
+     "2. Toast the black pepper in a dry pan for 1 minute.\n"
+     "3. Add a small amount of pasta water to the pan.\n"
+     "4. Toss in the cooked pasta.\n"
+     "5. Gradually add the Pecorino Romano while stirring continuously.\n"
+     "6. Add more pasta water until a creamy sauce forms. Serve immediately.",
+     [("Tonnarelli", 100, "g"), ("Pecorino Romano", 25, "g"), ("Black Pepper", 0.5, "tsp")]),
+
+    ("Tortellini in Brodo", "Soup", 4,
+     "1. Bring the broth to a gentle boil in a large pot.\n"
+     "2. Add the tortellini to the simmering broth.\n"
+     "3. Cook for 3-5 minutes for fresh tortellini.\n"
+     "4. Season with salt and black pepper.\n"
+     "5. Ladle the tortellini and broth into serving bowls.\n"
+     "6. Sprinkle with parmesan, garnish with parsley and serve hot.",
+     [("Tortellini", 125, "g"), ("Chicken Broth", 375, "ml"), ("Parmesan Cheese", 12, "g"),
+      ("Fresh Parsley", 2, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    # The butter here is measured by the TABLESPOON: 1 tbsp = 13.5 g at the
+    # seeded density of 0.91 g/ml, so 0.5 tbsp per serving takes ~27 g over 4.
+    ("Ravioli Ricotta e Spinaci", "Main Course", 4,
+     "1. Bring a large pot of salted water to a boil.\n"
+     "2. Cook the ravioli until they float to the surface.\n"
+     "3. Melt the butter in a large skillet over medium heat.\n"
+     "4. Add the sage leaves and cook until fragrant and the butter begins to brown.\n"
+     "5. Drain the ravioli and toss gently to coat in the butter sauce.\n"
+     "6. Sprinkle with parmesan, season with black pepper and serve.",
+     [("Spinach & Ricotta Ravioli", 125, "g"), ("Butter", 0.5, "tbsp"), ("Fresh Sage", 2, "pcs"),
+      ("Parmesan Cheese", 12, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Gnocchi al Gorgonzola", "Main Course", 4,
+     "1. Cook the gnocchi until they float to the surface.\n"
+     "2. Heat the heavy cream in a saucepan over medium heat.\n"
+     "3. Add the gorgonzola and stir until melted.\n"
+     "4. Mix in the parmesan.\n"
+     "5. Drain the gnocchi and toss gently in the sauce.\n"
+     "6. Sprinkle with black pepper and parsley before serving.",
+     [("Potato Gnocchi", 125, "g"), ("Gorgonzola Cheese", 38, "g"), ("Heavy Cream", 50, "ml"),
+      ("Parmesan Cheese", 12, "g"), ("Fresh Parsley", 2, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Orecchiette con Cime di Rapa", "Main Course", 4,
+     "1. Cook the orecchiette in salted boiling water.\n"
+     "2. Add the broccoli rabe during the last 3-4 minutes of cooking.\n"
+     "3. Heat the olive oil in a large skillet.\n"
+     "4. Cook the garlic, anchovies and chilli flakes until fragrant.\n"
+     "5. Drain the pasta and broccoli rabe and toss everything together.\n"
+     "6. Serve immediately with extra olive oil if desired.",
+     [("Orecchiette", 100, "g"), ("Broccoli Rabe", 75, "g"), ("Garlic", 1, "pcs"),
+      ("Anchovy Fillets", 1, "pcs"), ("Olive Oil", 1, "tbsp"), ("Chili Flakes", 0.5, "g"),
+      ("Salt", 1, "g")]),
+
+    ("Pappardelle al Cinghiale", "Main Course", 4,
+     "1. Cook the pappardelle until al dente.\n"
+     "2. Heat the olive oil and saute the onion, carrot and garlic.\n"
+     "3. Add the wild boar and brown on all sides.\n"
+     "4. Pour in the red wine and let it reduce.\n"
+     "5. Add the crushed tomatoes and rosemary, then simmer 1.5-2 hours until tender.\n"
+     "6. Toss the pappardelle with the ragu, top with parmesan and serve.",
+     [("Pappardelle", 100, "g"), ("Wild Boar Meat", 125, "g"), ("Yellow Onion", 1, "pcs"),
+      ("Carrot", 1, "pcs"), ("Garlic", 1, "pcs"), ("Crushed Tomatoes", 125, "g"),
+      ("Red Wine", 30, "ml"), ("Olive Oil", 8, "ml"), ("Fresh Rosemary", 2, "g"),
+      ("Parmesan Cheese", 12, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Trofie al Pesto", "Main Course", 4,
+     "1. Cook the trofie until al dente.\n"
+     "2. Reserve a little pasta water before draining.\n"
+     "3. Toss the pasta with the basil pesto.\n"
+     "4. Add a splash of pasta water if needed.\n"
+     "5. Stir in the parmesan and drizzle with olive oil.\n"
+     "6. Garnish with pine nuts and serve.",
+     [("Trofie", 100, "g"), ("Basil Pesto", 38, "g"), ("Parmesan Cheese", 12, "g"),
+      ("Olive Oil", 8, "ml"), ("Pine Nuts", 5, "g")]),
+
+    ("Cannelloni Ricotta e Spinaci", "Main Course", 6,
+     "1. Preheat the oven to 180°C (350°F).\n"
+     "2. Mix the ricotta, spinach, salt and pepper.\n"
+     "3. Fill each cannelloni tube with the ricotta mixture.\n"
+     "4. Spread a layer of tomato sauce in a baking dish and arrange the cannelloni on top.\n"
+     "5. Cover with the remaining tomato sauce and the bechamel.\n"
+     "6. Sprinkle with mozzarella and parmesan and bake 35-40 minutes until bubbling.",
+     [("Cannelloni Tubes", 2, "pcs"), ("Ricotta Cheese", 50, "g"), ("Spinach", 34, "g"),
+      ("Tomato Sauce", 85, "ml"), ("Bechamel Sauce", 42, "ml"), ("Shredded Mozzarella", 25, "g"),
+      ("Parmesan Cheese", 8, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Manicotti", "Main Course", 4,
+     "1. Preheat the oven to 180°C (350°F).\n"
+     "2. Cook the manicotti shells until slightly firm.\n"
+     "3. Mix the ricotta, half the mozzarella, parmesan, egg, parsley, salt and pepper.\n"
+     "4. Fill each shell with the cheese mixture.\n"
+     "5. Spread marinara sauce in a baking dish and arrange the manicotti in it.\n"
+     "6. Cover with the remaining sauce and mozzarella and bake 30-35 minutes.",
+     [("Manicotti Shells", 2, "pcs"), ("Ricotta Cheese", 75, "g"), ("Shredded Mozzarella", 50, "g"),
+      ("Parmesan Cheese", 12, "g"), ("Egg", 0.25, "pcs"), ("Marinara Sauce", 125, "ml"),
+      ("Fresh Parsley", 2, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Pasta alla Norma", "Main Course", 4,
+     "1. Cook the rigatoni until al dente.\n"
+     "2. Heat the olive oil and cook the diced eggplant until golden and tender.\n"
+     "3. Add the garlic and cook for 1 minute.\n"
+     "4. Stir in the crushed tomatoes and simmer for 15 minutes.\n"
+     "5. Season with salt and black pepper and toss the pasta with the sauce.\n"
+     "6. Top with ricotta salata and fresh basil. Serve immediately.",
+     [("Rigatoni", 100, "g"), ("Eggplant", 1, "pcs"), ("Crushed Tomatoes", 125, "g"),
+      ("Garlic", 1, "pcs"), ("Olive Oil", 8, "ml"), ("Ricotta Salata", 25, "g"),
+      ("Fresh Basil", 3, "g"), ("Salt", 1, "g"), ("Black Pepper", 0.5, "g")]),
+
+    ("Pasta e Fagioli", "Soup", 6,
+     "1. Heat the olive oil in a large pot over medium heat.\n"
+     "2. Saute the onion, carrot, celery and garlic until softened.\n"
+     "3. Stir in the crushed tomatoes, broth and Italian seasoning.\n"
+     "4. Add the cannellini beans and simmer for 15-20 minutes.\n"
+     "5. Stir in the ditalini and cook until tender; season with salt and pepper.\n"
+     "6. Serve hot with grated parmesan and a drizzle of olive oil.",
+     [("Ditalini", 42, "g"), ("Cannellini Beans", 133, "g"), ("Yellow Onion", 1, "pcs"),
+      ("Carrot", 1, "pcs"), ("Celery", 1, "pcs"), ("Garlic", 1, "pcs"),
+      ("Vegetable Broth", 133, "ml"), ("Crushed Tomatoes", 67, "g"), ("Olive Oil", 5, "ml"),
+      ("Italian Seasoning", 0.5, "g"), ("Parmesan Cheese", 8, "g"), ("Salt", 1, "g"),
+      ("Black Pepper", 0.5, "g")]),
 ]
 
 
 # ── PREPARATIONS (production history, last 30 days) ──────────────────────────
+# Pizzas are counted in pizzas (servingSize 1), pasta in plates.
 
 SEED_PREPARATIONS = [
-    (30, "Adobong Manok",          8),
-    (29, "Sinigang na Baboy",      6),
-    (28, "Ginisang Kangkong",      4),
-    (28, "Lechon Kawali",          5),
-    (27, "Adobong Manok",          6),
-    (26, "Tinolang Manok",         7),
-    (25, "Ginisang Monggo",        5),
-    (24, "Adobong Manok",          8),
-    (23, "Sinigang na Baboy",      6),
-    (22, "Ginisang Sitaw",         4),
-    (22, "Kare-Kare",              4),
-    (21, "Ginisang Kangkong",      6),
-    (20, "Lechon Kawali",          4),
-    (19, "Adobong Manok",          7),
-    (17, "Tinolang Manok",         6),
-    (16, "Sinigang na Baboy",      8),
-    (15, "Adobong Manok",          8),
-    (14, "Ginisang Monggo",        4),
-    (13, "Ginisang Kangkong",      5),
-    (13, "Lechon Kawali",          6),
-    (10, "Adobong Manok",         10),
-    (9,  "Sinigang na Baboy",      6),
-    (8,  "Tinolang Manok",         7),
-    (7,  "Kare-Kare",              5),
-    (6,  "Ginisang Kangkong",      4),
-    (5,  "Adobong Manok",          8),
-    (4,  "Lechon Kawali",          5),
-    (3,  "Ginisang Monggo",        6),
-    (2,  "Sinigang na Baboy",      8),
-    (1,  "Adobong Manok",          6),
+    (30, "Pizza Margherita",             14),
+    (30, "Spaghetti Carbonara",          10),
+    (29, "Pizza Diavola",                 9),
+    (28, "Penne all'Arrabbiata",          8),
+    (28, "Pizza Quattro Formaggi",        7),
+    (27, "Tagliatelle al Ragu",          12),
+    (26, "Pizza Margherita",             16),
+    (25, "Lasagne alla Bolognese",       12),
+    (24, "Pizza Capricciosa",             8),
+    (23, "Spaghetti Carbonara",          11),
+    (22, "Pizza Prosciutto e Funghi",     9),
+    (22, "Cacio e Pepe",                  8),
+    (21, "Pizza Margherita",             18),
+    (20, "Trofie al Pesto",               7),
+    (19, "Pizza Diavola",                11),
+    (18, "Bucatini all'Amatriciana",      9),
+    (17, "Pizza Quattro Stagioni",        8),
+    (16, "Spaghetti al Pomodoro",        10),
+    (15, "Pizza Margherita",             15),
+    (14, "Gnocchi al Gorgonzola",         8),
+    (13, "Pizza Boscaiola",               7),
+    (12, "Fettuccine Alfredo",           10),
+    (10, "Pizza Margherita",             17),
+    (9,  "Spaghetti Carbonara",          12),
+    (8,  "Pizza Parma",                   8),
+    (7,  "Pasta alla Norma",              9),
+    (6,  "Pizza Napoli",                  7),
+    (4,  "Tagliatelle al Ragu",          11),
+    (3,  "Pizza Diavola",                10),
+    (1,  "Pizza Margherita",             16),
 ]
 
 
 # ── USED STOCK ────────────────────────────────────────────────────────────────
-# Simulates a kitchen that has been operating: some bottles/cans are partially used.
+# Simulates a kitchen mid-service: some bottles/jars/cartons are partially used.
 # (product_name, remainingBase, baseUnit)
-#   remainingBase = how much is left in opened units, in ml or g
+#   remainingBase = how much is left in the opened unit, in ml or g
 SEED_USED_STOCK = [
-    # Condiments
-    ("Cooking Oil",   970, "ml"),  # 1000ml bottle, used 30ml
-    ("Fish Sauce",    420, "ml"),  # 700ml bottle, used 280ml
-    ("Soy Sauce",     280, "ml"),  # 750ml bottle, used 470ml
-    ("Oyster Sauce",  175, "ml"),  # 350ml bottle, used 175ml
-    ("Sesame Oil",     80, "ml"),  # 150ml bottle, used 70ml
-    ("Vinegar",       550, "ml"),  # 750ml bottle, used 200ml
-    ("Liver Spread",   45, "g"),   # 100g can, used 55g
-    # Tomato Paste: can is fully used - no entry (0 remaining)
+    # Oils and sauces
+    ("Olive Oil",        700, "ml"),  # 1000ml bottle, 300ml used
+    ("Truffle Oil",       60, "ml"),  # 100ml bottle, 40ml used
+    ("Tomato Sauce",     250, "ml"),  # 700ml jar, 450ml used
+    ("Marinara Sauce",   400, "ml"),  # 700ml jar, 300ml used
+    ("Bechamel Sauce",   200, "ml"),  # 500ml pack, 300ml used
+    ("Basil Pesto",       90, "g"),   # 190g jar, 100g used
+    ("Tomato Paste",      60, "g"),   # 150g tube, 90g used
+    # Crushed Tomatoes: the open can was finished - no entry (0 remaining)
 
-    # Dairy
-    ("All-Purpose Cream", 150, "ml"),  # 250ml pack, used 100ml
-    ("Condensed Milk",    200, "ml"),  # 390ml can, used 190ml
-    ("Evaporated Milk",   185, "ml"),  # 370ml can, used 185ml
-    # Coconut Milk: out of stock - no entry
+    # Dairy and broths
+    ("Heavy Cream",      450, "ml"),  # 1L carton, 550ml used
+    ("Chicken Broth",    600, "ml"),  # 1L carton, 400ml used
+    ("Vegetable Broth",  350, "ml"),  # 1L carton, 650ml used
+
+    # Bar and kitchen alcohol
+    ("Vodka",            500, "ml"),  # 700ml bottle, 200ml used
+    ("Dry White Wine",   300, "ml"),  # 750ml bottle, 450ml used
+    ("Red Wine",         400, "ml"),  # 750ml bottle, 350ml used
+    ("Chianti",          450, "ml"),  # open bottle on the by-the-glass list
+    ("Pinot Grigio",     300, "ml"),  # open bottle on the by-the-glass list
 ]
 
 
@@ -761,22 +1150,45 @@ SEED_USED_STOCK = [
 def slug(name):
     return (name.strip().lower()
             .replace(" ", "_").replace("/", "_")
-            .replace("'", "").replace("(", "").replace(")", ""))
+            .replace("'", "").replace("(", "").replace(")", "")
+            .replace("&", "and"))
+
+
+def validate():
+    """Every product name referenced elsewhere must exist in SEED_PRODUCTS.
+
+    Runs before any write: a typo here would otherwise create batches or
+    used_stock docs pointing at a product id that never gets created.
+    """
+    print("\n=== INTEGRITY CHECK ===")
+    known = {name.lower() for name, *_ in SEED_PRODUCTS}
+    missing = []
+
+    for (rname, _c, _s, _i, ingredients) in SEED_RECIPES:
+        for (iname, _q, _u) in ingredients:
+            if iname.lower() not in known:
+                missing.append((f"recipe {rname}", iname))
+    for (bname, *_rest) in SEED_BATCHES:
+        if bname.lower() not in known:
+            missing.append(("batch", bname))
+    for (uname, *_rest) in SEED_USED_STOCK:
+        if uname.lower() not in known:
+            missing.append(("used_stock", uname))
+
+    if missing:
+        for where, name in missing:
+            print(f"  MISSING PRODUCT  '{name}'  (referenced by {where})")
+        raise SystemExit(f"\n{len(missing)} reference(s) have no matching product. Fix SEED_PRODUCTS.")
+
+    stocked = {name.lower() for name, *_ in SEED_BATCHES}
+    for name in sorted(known - stocked):
+        print(f"  no batch (out of stock): {name}")
+    print(f"  OK - {len(SEED_PRODUCTS)} products, all recipe/batch/used_stock references resolve.")
 
 
 def main():
     db = get_db()
-
-    # ── 0. Cleanup: delete legacy "Fresh Produce" products ───────────────────
-    print("\n=== CLEANUP: Fresh Produce duplicates ===")
-    fresh_produce_docs = list(db.collection("products").where("category", "==", "Fresh Produce").stream())
-    if not fresh_produce_docs:
-        print("  Nothing to clean up.")
-    for doc in fresh_produce_docs:
-        name = doc.to_dict().get("name", doc.id)
-        print(f"  {'DELETE' if COMMIT else 'DRY'}  products/{doc.id}  (name={name})")
-        if COMMIT:
-            doc.reference.delete()
+    validate()
 
     # ── 1. Firebase Auth + Firestore users ───────────────────────────────────
     print("\n=== USERS ===")
@@ -824,7 +1236,7 @@ def main():
             print(f"  firestore DRY users/{uid}  role={u['role']}")
 
     admin_uid = uid_map.get("admin@gmail.com", "seed_admin")
-    admin_name = "Smith Doe"
+    admin_name = SEED_USERS[0]["fullName"]
     admin_role = "admin"
 
     # ── 2. Products ──────────────────────────────────────────────────────────
@@ -853,7 +1265,7 @@ def main():
         product_id_map[name] = doc_id
         if COMMIT:
             db.collection("products").document(doc_id).set(data, merge=True)
-        m = f"measurable({usage_unit}, ×{unit_size})" if measurable else "not-measurable"
+        m = f"measurable({usage_unit}, x{unit_size})" if measurable else "not-measurable"
         print(f"  {'SET' if COMMIT else 'DRY'}  products/{doc_id}  [{category}] {du}  {m}")
 
     # ── 3. Inventory batches ─────────────────────────────────────────────────
@@ -877,7 +1289,7 @@ def main():
             db.collection("inventory_batches").document(doc_id).set(data, merge=True)
         print(f"  {'SET' if COMMIT else 'DRY'}  inventory_batches/{doc_id}  qty={qty_base}  exp={expiry_dt.date()}")
 
-    print("  NOTE: Coconut Milk has no batch → OUT OF STOCK (Bibingka, Maja Blanca, Ginataang Hipon = 0)")
+    print("  NOTE: Buffalo Mozzarella has no batch → OUT OF STOCK (Pizza Bufalina = 0)")
 
     # ── 4. Recipes ───────────────────────────────────────────────────────────
     print("\n=== RECIPES ===")
@@ -924,7 +1336,7 @@ def main():
         }
         if COMMIT:
             db.collection("preparations").document(doc_id).set(data, merge=True)
-        print(f"  {'SET' if COMMIT else 'DRY'}  preparations/{doc_id}  {prep_date}  {recipe_name} ×{servings}")
+        print(f"  {'SET' if COMMIT else 'DRY'}  preparations/{doc_id}  {prep_date}  {recipe_name} x{servings}")
 
     # ── 6. Used stock ────────────────────────────────────────────────────────
     print("\n=== USED STOCK ===")
@@ -944,24 +1356,13 @@ def main():
         cats[cat] = cats.get(cat, 0) + 1
     cat_summary = ", ".join(f"{k}: {v}" for k, v in sorted(cats.items()))
 
-    print("\n── EXPECTED CAN-COOK HIGHLIGHTS ──────────────────────────────────")
-    print("  Adobong Manok          : ~10  (3000 g chicken thigh ÷ 300 g)")
-    print("  Chicken Inasal         : ~12  (3000 g chicken thigh ÷ 250 g)")
-    print("  Tinolang Manok         :  ~8  (2000 g chicken wings ÷ 250 g)")
-    print("  Sinigang na Baboy      : ~10  (okra 36pcs ÷ 3 limits; pork belly ample)")
-    print("  Lechon Kawali          : ~18  (4500 g pork belly ÷ 250 g)")
-    print("  Caldereta              : ~12  (2500 g beef brisket ÷ 200 g)")
-    print("  Kare-Kare              : ~10  (2500 g beef brisket ÷ 250 g)")
-    print("  Bulalo                 :  ~8  (2000 g beef shank ÷ 250 g)")
-    print("  Kinilaw na Bangus      :  ~8  (1600 g bangus ÷ 200 g)")
-    print("  Lumpia Shanghai        :  ~9  (900 g ground pork ÷ 100 g)")
-    print("  Ukoy                   :  ~8  (400 g bean sprout ÷ 50 g)")
-    print("  Leche Flan             :  ~8  (35 pcs egg ÷ 4 pcs)")
-    print("  Ensaladang Mangga      :  ~8  (8 pcs green mango ÷ 1 pcs)")
-    print("  Buko Pandan            : ~20  (5 pcs young coconut ÷ 0.25 pcs)")
-    print("  Bibingka               :   0  (Coconut Milk OUT)               ← CANNOT COOK")
-    print("  Maja Blanca            :   0  (Coconut Milk OUT)               ← CANNOT COOK")
-    print("  Ginataang Hipon        :   0  (Coconut Milk OUT)               ← CANNOT COOK")
+    print("\n── INTENTIONAL SHORTAGES (so the alerts have something to show) ──")
+    print("  Buffalo Mozzarella     :  no batch  → Pizza Bufalina        = 0   ← CANNOT COOK")
+    print("  Wild Boar Meat         :    800 g   → Pappardelle Cinghiale = 6   ← LOW")
+    print("  Clams                  :   1200 g   → Spaghetti Vongole     = 4   ← LOW")
+    print("  Truffle Oil            :  1 bottle  → Pizza Tartufata       = 10  ← LOW")
+    print("  Ricotta Salata         :    300 g   → Pasta alla Norma      = 12  ← LOW")
+    print("  Pizza Dough            :   26 pcs   → expires in 1-3 days         ← EXPIRING")
 
     measurable_count = sum(1 for *_, m, _, _ in SEED_PRODUCTS if m)
     not_measurable_count = len(SEED_PRODUCTS) - measurable_count
