@@ -18,8 +18,10 @@ dataset/
 *.log
 logs/
 
-# Firebase service account key
-serviceAccountKey.json
+# Firebase service account key(s) - serviceAccountKey.json is the current
+# active project's key; serviceAccountKey-old.json etc. are prior projects'
+# keys kept around during migration.
+*serviceAccountKey*.json
 
 # Firestore data backups (may contain production data)
 backups/
